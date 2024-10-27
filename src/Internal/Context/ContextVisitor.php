@@ -27,8 +27,6 @@ use function Typhoon\Reflection\Internal\array_value_last;
  */
 final class ContextVisitor extends NodeVisitorAbstract implements ContextProvider
 {
-    private readonly Context $codeContext;
-
     /**
      * @var list<Context>
      */
@@ -38,18 +36,15 @@ final class ContextVisitor extends NodeVisitorAbstract implements ContextProvide
      * @param ?non-empty-string $file
      */
     public function __construct(
-        string $code,
-        ?string $file,
+        private readonly string $code,
+        private readonly ?string $file,
         private readonly NameContext $nameContext,
         private readonly AnnotatedDeclarationsDiscoverer $annotatedDeclarationsDiscoverer = NullAnnotatedDeclarationsDiscoverer::Instance,
-    ) {
-        $this->codeContext = Context::start($code, $file);
-    }
+    ) {}
 
     public function get(): Context
     {
-        return array_value_last($this->contextStack)
-            ?? $this->codeContext->withNameContext($this->nameContext);
+        return array_value_last($this->contextStack) ?? Context::start($this->code, $this->file, $this->nameContext);
     }
 
     public function beforeTraverse(array $nodes): ?array
@@ -78,9 +73,11 @@ final class ContextVisitor extends NodeVisitorAbstract implements ContextProvide
             $position = $node->getStartFilePos();
             \assert($position >= 0);
 
-            $this->contextStack[] = $this->get()->enterAnonymousFunction(
+            $context = $this->get();
+
+            $this->contextStack[] = $context->enterAnonymousFunction(
                 line: $line,
-                column: $this->codeContext->column($position),
+                column: $context->column($position),
                 templateNames: $this->annotatedDeclarationsDiscoverer->discoverAnnotatedDeclarations($node)->templateNames,
             );
 
@@ -96,9 +93,11 @@ final class ContextVisitor extends NodeVisitorAbstract implements ContextProvide
                 $position = $node->getStartFilePos();
                 \assert($position >= 0);
 
-                $this->contextStack[] = $this->get()->enterAnonymousClass(
+                $context = $this->get();
+
+                $this->contextStack[] = $context->enterAnonymousClass(
                     line: $line,
-                    column: $this->codeContext->column($position),
+                    column: $context->column($position),
                     parentName: $node->extends?->toString(),
                     aliasNames: $typeNames->aliasNames,
                     templateNames: $typeNames->templateNames,

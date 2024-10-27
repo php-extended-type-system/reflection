@@ -46,20 +46,16 @@ final class Context implements TypeContext
     /**
      * @param ?non-empty-string $file
      */
-    public static function start(string $code, ?string $file = null): self
+    public static function start(string $code, ?string $file = null, ?NameContext $nameContext = null): self
     {
-        $nameContext = new NameContext(new Throwing());
-        $nameContext->startNamespace();
+        if ($nameContext === null) {
+            $nameContext = new NameContext(new Throwing());
+            $nameContext->startNamespace();
+        } else {
+            $nameContext = clone $nameContext;
+        }
 
         return new self($code, $file, $nameContext);
-    }
-
-    public function withNameContext(NameContext $nameContext): self
-    {
-        $context = clone $this;
-        $context->nameContext = clone $nameContext;
-
-        return $context;
     }
 
     /**
