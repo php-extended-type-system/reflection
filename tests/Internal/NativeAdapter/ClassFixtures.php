@@ -68,6 +68,8 @@ final class ClassFixtures
         'ZMQContext' => true,
         // getMethod(remove).getNumberOfRequiredParameters(): failed asserting that 1 is identical to 2
         'ZMQPoll' => true,
+        // Fatal error: OAuthProvider::__construct(): For the CLI sapi parameters must be set first via OAuthProvider::__construct(array("oauth_param" => "value", ...))
+        'OAuthProvider' => true,
     ];
 
     /**
