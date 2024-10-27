@@ -106,7 +106,6 @@ final class NodeReflector
             ->with(Data::Namespace, $context->namespace())
             ->with(Data::Attributes, $this->reflectAttributes($context, $node->attrGroups))
             ->with(Data::Constants, $this->reflectConstants($context, $node->stmts))
-            ->with(Data::Properties, $this->reflectProperties($context, $node->getProperties()))
             ->with(Data::Methods, $this->reflectMethods($node->getMethods()));
 
         if ($node instanceof Class_) {
@@ -117,7 +116,8 @@ final class NodeReflector
                 ->withMap($this->reflectTraitUses($node->getTraitUses()))
                 ->with(Data::Abstract, $node->isAbstract())
                 ->with(Data::NativeReadonly, $node->isReadonly())
-                ->with(Data::NativeFinal, $node->isFinal());
+                ->with(Data::NativeFinal, $node->isFinal())
+                ->with(Data::Properties, $this->reflectProperties($context, $node->getProperties()));
         }
 
         if ($node instanceof Interface_) {
@@ -142,7 +142,8 @@ final class NodeReflector
 
         return $data
             ->with(Data::ClassKind, ClassKind::Trait)
-            ->withMap($this->reflectTraitUses($node->getTraitUses()));
+            ->withMap($this->reflectTraitUses($node->getTraitUses()))
+            ->with(Data::Properties, $this->reflectProperties($context, $node->getProperties()));
     }
 
     /**
