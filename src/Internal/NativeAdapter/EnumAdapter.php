@@ -361,4 +361,68 @@ final class EnumAdapter extends \ReflectionEnum
     {
         $this->_class->setStaticPropertyValue($name, $value);
     }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function newLazyGhost(callable $initializer, int $options = 0): object
+    {
+        return $this->_class->newLazyGhost($initializer, $options);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function newLazyProxy(callable $factory, int $options = 0): object
+    {
+        return $this->_class->newLazyProxy($factory, $options);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function resetAsLazyGhost(object $object, callable $initializer, int $options = 0): void
+    {
+        $this->_class->resetAsLazyGhost($object, $initializer, $options);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function resetAsLazyProxy(object $object, callable $factory, int $options = 0): void
+    {
+        $this->_class->resetAsLazyProxy($object, $factory, $options);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function initializeLazyObject(object $object): object
+    {
+        return $this->_class->initializeLazyObject($object);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function markLazyObjectAsInitialized(object $object): object
+    {
+        return $this->_class->markLazyObjectAsInitialized($object);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function getLazyInitializer(object $object): ?callable
+    {
+        return $this->_class->getLazyInitializer($object);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function isUninitializedLazyObject(object $object): bool
+    {
+        return $this->_class->isUninitializedLazyObject($object);
+    }
 }

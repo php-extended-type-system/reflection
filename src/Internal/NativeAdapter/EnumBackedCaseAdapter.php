@@ -102,6 +102,14 @@ final class EnumBackedCaseAdapter extends \ReflectionEnumBackedCase
         return $this->constant->hasType();
     }
 
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function isDeprecated(): bool
+    {
+        return $this->constant->isDeprecated();
+    }
+
     public function isEnumCase(): bool
     {
         return $this->constant->isEnumCase();

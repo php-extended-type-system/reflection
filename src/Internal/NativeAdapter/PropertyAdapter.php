@@ -179,6 +179,154 @@ final class PropertyAdapter extends \ReflectionProperty
         parent::setValue($objectOrValue, $value);
     }
 
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function getHooks(): array
+    {
+        $this->loadNative();
+
+        return parent::getHooks();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function getHook(\PropertyHookType $hook): ?\ReflectionMethod
+    {
+        $this->loadNative();
+
+        return parent::getHook($hook);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isVirtual(): bool
+    {
+        $this->loadNative();
+
+        return parent::isVirtual();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function getSettableType(): ?\ReflectionType
+    {
+        $this->loadNative();
+
+        return parent::getSettableType();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, UndefinedMethod
+     */
+    public function getRawValue(object $object): mixed
+    {
+        $this->loadNative();
+
+        return parent::getRawValue($object);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, UndefinedMethod
+     */
+    public function setRawValue(object $object, mixed $value): void
+    {
+        $this->loadNative();
+
+        parent::setRawValue($object, $value);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, UndefinedMethod
+     */
+    public function setRawValueWithoutLazyInitialization(object $object, mixed $value): void
+    {
+        $this->loadNative();
+
+        parent::setRawValueWithoutLazyInitialization($object, $value);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, UndefinedMethod
+     */
+    public function skipLazyInitialization(object $object): void
+    {
+        $this->loadNative();
+
+        parent::skipLazyInitialization($object);
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isPrivateSet(): bool
+    {
+        $this->loadNative();
+
+        return parent::isPrivateSet();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isProtectedSet(): bool
+    {
+        $this->loadNative();
+
+        return parent::isProtectedSet();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod
+     */
+    public function isDynamic(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isAbstract(): bool
+    {
+        $this->loadNative();
+
+        return parent::isAbstract();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isFinal(): bool
+    {
+        $this->loadNative();
+
+        return parent::isFinal();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function hasHooks(): bool
+    {
+        $this->loadNative();
+
+        return parent::hasHooks();
+    }
+
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function hasHook(\PropertyHookType $hook): bool
+    {
+        $this->loadNative();
+
+        return parent::hasHook($hook);
+    }
+
     private bool $nativeLoaded = false;
 
     private function loadNative(): void

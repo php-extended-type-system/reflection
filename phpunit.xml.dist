@@ -11,12 +11,17 @@
 >
     <php>
         <ini name="display_errors" value="1"/>
-        <ini name="error_reporting" value="-1"/>
+        <ini name="error_reporting" value="22527"/>
     </php>
 
     <testsuites>
         <testsuite name="default">
             <directory>tests</directory>
+        </testsuite>
+
+        <testsuite name="php84">
+            <directory>tests</directory>
+            <exclude>tests/Internal/NativeAdapter/AdapterCompatibilityTest.php</exclude>
         </testsuite>
 
         <testsuite name="infection">

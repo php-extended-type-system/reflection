@@ -298,6 +298,10 @@ final class AdapterCompatibilityTest extends TestCase
         if (method_exists(\ReflectionClassConstant::class, 'hasType')) {
             self::assertEquals($native->hasType(), $typhoon->hasType(), $messagePrefix . '.hasType()');
         }
+        if (method_exists(\ReflectionClassConstant::class, 'isDeprecated')) {
+            /** @psalm-suppress MixedArgument, UnusedPsalmSuppress */
+            self::assertSame($native->isDeprecated(), $typhoon->isDeprecated(), $messagePrefix . '.isDeprecated()');
+        }
         self::assertSame($native->isEnumCase(), $typhoon->isEnumCase(), $messagePrefix . '.isEnumCase()');
         self::assertSame($native->isFinal(), $typhoon->isFinal(), $messagePrefix . '.isFinal()');
         self::assertSame($native->isPrivate(), $typhoon->isPrivate(), $messagePrefix . '.isPrivate()');
@@ -332,6 +336,10 @@ final class AdapterCompatibilityTest extends TestCase
         self::assertSame($native->hasDefaultValue(), $typhoon->hasDefaultValue(), $messagePrefix . '.hasDefaultValue()');
         self::assertSame($native->hasType(), $typhoon->hasType(), $messagePrefix . '.hasType()');
         self::assertSame($native->isDefault(), $typhoon->isDefault(), $messagePrefix . '.isDefault()');
+        if (method_exists(\ReflectionProperty::class, 'isDynamic')) {
+            /** @psalm-suppress MixedArgument, UnusedPsalmSuppress */
+            self::assertSame($native->isDynamic(), $typhoon->isDynamic(), $messagePrefix . '.isDynamic()');
+        }
         // TODO isInitialized()
         self::assertSame($native->isPrivate(), $typhoon->isPrivate(), $messagePrefix . '.isPrivate()');
         self::assertSame($native->isPromoted(), $typhoon->isPromoted(), $messagePrefix . '.isPromoted()');

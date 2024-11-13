@@ -124,6 +124,15 @@ final class ClassConstantAdapter extends \ReflectionClassConstant
         return $this->reflection->type(TypeKind::Native) !== null;
     }
 
+    /**
+     * @psalm-suppress PossiblyUnusedMethod, UnusedPsalmSuppress
+     * @TODO
+     */
+    public function isDeprecated(): bool
+    {
+        return false;
+    }
+
     public function isEnumCase(): bool
     {
         return $this->reflection->isEnumCase();

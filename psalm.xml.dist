@@ -115,5 +115,6 @@
         <file name="tests/Internal/NativeAdapter/Fixtures/classes.php" preloadClasses="true"/>
         <file name="tests/Internal/NativeAdapter/Fixtures/classes_php82.php" preloadClasses="true"/>
         <file name="tests/Internal/NativeAdapter/Fixtures/classes_php83.php" preloadClasses="true"/>
+        <file name="src/Internal/NativeAdapter/PropertyHookType.php" preloadClasses="true"/>
     </stubs>
 </psalm>

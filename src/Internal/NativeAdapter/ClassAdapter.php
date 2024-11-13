@@ -526,6 +526,86 @@ final class ClassAdapter extends \ReflectionClass
     }
 
     /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function newLazyGhost(callable $initializer, int $options = 0): object
+    {
+        $this->loadNative();
+
+        return parent::newLazyGhost($initializer, $options);
+    }
+
+    /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function newLazyProxy(callable $factory, int $options = 0): object
+    {
+        $this->loadNative();
+
+        return parent::newLazyProxy($factory, $options);
+    }
+
+    /**
+     * @psalm-suppress UndefinedMethod
+     */
+    public function resetAsLazyGhost(object $object, callable $initializer, int $options = 0): void
+    {
+        $this->loadNative();
+
+        parent::resetAsLazyGhost($object, $initializer, $options);
+    }
+
+    /**
+     * @psalm-suppress UndefinedMethod
+     */
+    public function resetAsLazyProxy(object $object, callable $factory, int $options = 0): void
+    {
+        $this->loadNative();
+
+        parent::resetAsLazyProxy($object, $factory, $options);
+    }
+
+    /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function initializeLazyObject(object $object): object
+    {
+        $this->loadNative();
+
+        return parent::initializeLazyObject($object);
+    }
+
+    /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function markLazyObjectAsInitialized(object $object): object
+    {
+        $this->loadNative();
+
+        return parent::markLazyObjectAsInitialized($object);
+    }
+
+    /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function getLazyInitializer(object $object): ?callable
+    {
+        $this->loadNative();
+
+        return parent::getLazyInitializer($object);
+    }
+
+    /**
+     * @psalm-suppress MixedInferredReturnType, MixedReturnStatement, UndefinedMethod
+     */
+    public function isUninitializedLazyObject(object $object): bool
+    {
+        $this->loadNative();
+
+        return parent::isUninitializedLazyObject($object);
+    }
+
+    /**
      * @return Properties
      */
     private function nativeProperties(): Collection
