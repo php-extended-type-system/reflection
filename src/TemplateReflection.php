@@ -4,61 +4,78 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection;
 
+use Typhoon\DeclarationId\AnonymousClassId;
+use Typhoon\DeclarationId\AnonymousFunctionId;
+use Typhoon\DeclarationId\Id;
+use Typhoon\DeclarationId\MethodId;
+use Typhoon\DeclarationId\NamedClassId;
+use Typhoon\DeclarationId\NamedFunctionId;
 use Typhoon\DeclarationId\TemplateId;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
+use Typhoon\Reflection\Metadata\TemplateDeclaration;
 use Typhoon\Type\Type;
 use Typhoon\Type\Variance;
-use Typhoon\TypedMap\TypedMap;
 
 /**
  * @api
+ * @psalm-import-type Templates from TyphoonReflector
  */
 final class TemplateReflection
 {
-    use NonSerializable;
-
-    public readonly TemplateId $id;
-
     /**
-     * This internal property is public for testing purposes.
-     * It will likely be available as part of the API in the near future.
-     *
-     * @internal
-     * @psalm-internal Typhoon
+     * @param array<non-empty-string, TemplateDeclaration> $templates
+     * @return Templates
      */
-    public readonly TypedMap $data;
+    public static function from(
+        NamedFunctionId|AnonymousFunctionId|NamedClassId|AnonymousClassId|MethodId $declarationId,
+        array $templates,
+    ): Collection {
+        $reflections = [];
+        $index = 0;
 
-    /**
-     * @internal
-     * @psalm-internal Typhoon\Reflection
-     */
-    public function __construct(TemplateId $id, TypedMap $data)
-    {
-        $this->id = $id;
-        $this->data = $data;
+        foreach ($templates as $name => $template) {
+            $reflections[$name] = new self(
+                id: Id::template($declarationId, $name),
+                index: $index++,
+                variance: $template->variance,
+                constraint: $template->constraint,
+                snippet: $template->snippet,
+            );
+        }
+
+        return new Collection($reflections);
     }
+
+    /**
+     * @param non-negative-int $index
+     */
+    private function __construct(
+        public readonly TemplateId $id,
+        private readonly int $index,
+        private readonly Variance $variance,
+        private readonly Type $constraint,
+        private readonly ?SourceCodeSnippet $snippet,
+    ) {}
 
     /**
      * @return non-negative-int
      */
     public function index(): int
     {
-        return $this->data[Data::Index];
+        return $this->index;
     }
 
     public function variance(): Variance
     {
-        return $this->data[Data::Variance];
+        return $this->variance;
     }
 
     public function constraint(): Type
     {
-        return $this->data[Data::Constraint];
+        return $this->constraint;
     }
 
-    public function location(): ?Location
+    public function snippet(): ?SourceCodeSnippet
     {
-        return $this->data[Data::Location];
+        return $this->snippet;
     }
 }

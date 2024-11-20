@@ -14,6 +14,7 @@ final class ClassFixtures
     private static ?array $classes = null;
 
     /**
+     * @psalm-suppress PossiblyUnusedReturnValue
      * @return array<string, array{class-string}>
      */
     public static function get(): array
@@ -22,22 +23,7 @@ final class ClassFixtures
             return self::$classes;
         }
 
-        $classes = [
-            \Traversable::class,
-            \Iterator::class,
-            \IteratorAggregate::class,
-            \Stringable::class,
-            \UnitEnum::class,
-            \BackedEnum::class,
-            \Countable::class,
-            \Serializable::class,
-            \ArrayAccess::class,
-            \Throwable::class,
-            // \Error::class,
-            // \Exception::class,
-            \ArrayObject::class,
-            ...self::loadFromFile(__DIR__ . '/Fixtures/classes.php'),
-        ];
+        $classes = self::loadFromFile(__DIR__ . '/Fixtures/classes.php');
 
         if (\PHP_VERSION_ID >= 80200) {
             $classes = [...$classes, ...self::loadFromFile(__DIR__ . '/Fixtures/classes_php82.php')];

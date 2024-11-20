@@ -20,8 +20,7 @@
         </testsuite>
 
         <testsuite name="infection">
-            <file>tests/Internal/Inheritance/TypeResolversTest.php</file>
-            <file>tests/Internal/PhpDoc/PhpDocTypeReflectorTest.php</file>
+            <file>tests/Internal/Type/TypeResolversTest.php</file>
             <file>tests/Internal/GetNamespaceTest.php</file>
             <file>tests/Internal/GetShortNameTest.php</file>
         </testsuite>

@@ -15,15 +15,15 @@ use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprNullNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprStringNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprTrueNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstFetchNode;
-use Typhoon\Reflection\Internal\ConstantExpression\ArrayElement;
-use Typhoon\Reflection\Internal\ConstantExpression\ArrayExpression;
-use Typhoon\Reflection\Internal\ConstantExpression\ClassConstantFetch;
-use Typhoon\Reflection\Internal\ConstantExpression\CompilationContext;
-use Typhoon\Reflection\Internal\ConstantExpression\ConstantFetch;
-use Typhoon\Reflection\Internal\ConstantExpression\Expression;
-use Typhoon\Reflection\Internal\ConstantExpression\Value;
-use Typhoon\Reflection\Internal\ConstantExpression\Values;
-use Typhoon\Reflection\Internal\Context\Context;
+use Typhoon\Reflection\Declaration\ConstantExpression\AppendedArrayElement;
+use Typhoon\Reflection\Declaration\ConstantExpression\ArrayDeclaration;
+use Typhoon\Reflection\Declaration\ConstantExpression\ClassConstantFetch;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpressionContext;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantFetch;
+use Typhoon\Reflection\Declaration\ConstantExpression\KeyArrayElement;
+use Typhoon\Reflection\Declaration\ConstantExpression\Value;
+use Typhoon\Reflection\Declaration\Context;
 
 /**
  * @internal
@@ -31,26 +31,27 @@ use Typhoon\Reflection\Internal\Context\Context;
  */
 final class PhpDocConstantExpressionCompiler
 {
-    private readonly CompilationContext $context;
+    private readonly ConstantExpressionContext $constantExpressionContext;
 
-    public function __construct(Context $context)
-    {
-        $this->context = new CompilationContext($context);
+    public function __construct(
+        private readonly Context $context,
+    ) {
+        $this->constantExpressionContext = new ConstantExpressionContext($context);
     }
 
     /**
-     * @return ($expr is null ? null : Expression)
+     * @return ($expr is null ? null : ConstantExpression)
      */
-    public function compile(?ConstExprNode $expr): ?Expression
+    public function compile(?ConstExprNode $expr): ?ConstantExpression
     {
         return match (true) {
             $expr === null => null,
-            $expr instanceof ConstExprNullNode => Values::Null,
-            $expr instanceof ConstExprTrueNode => Values::True,
-            $expr instanceof ConstExprFalseNode => Values::False,
-            $expr instanceof ConstExprIntegerNode => Value::from((int) $expr->value),
-            $expr instanceof ConstExprFloatNode => Value::from((float) $expr->value),
-            $expr instanceof ConstExprStringNode => Value::from($expr->value),
+            $expr instanceof ConstExprNullNode => new Value(null),
+            $expr instanceof ConstExprTrueNode => new Value(true),
+            $expr instanceof ConstExprFalseNode => new Value(false),
+            $expr instanceof ConstExprIntegerNode => new Value((int) $expr->value),
+            $expr instanceof ConstExprFloatNode => new Value((float) $expr->value),
+            $expr instanceof ConstExprStringNode => new Value($expr->value),
             $expr instanceof ConstExprArrayNode => $this->compileArray($expr),
             $expr instanceof ConstFetchNode => $this->compileConstFetch($expr),
             default => throw new \LogicException(\sprintf('Unsupported expression %s', $expr::class)),
@@ -58,43 +59,38 @@ final class PhpDocConstantExpressionCompiler
     }
 
     /**
-     * @return Expression<array>
+     * @return ConstantExpression<array>
      */
-    private function compileArray(ConstExprArrayNode $expr): Expression
+    private function compileArray(ConstExprArrayNode $expr): ConstantExpression
     {
-        if ($expr->items === []) {
-            return Value::from([]);
-        }
-
-        return new ArrayExpression(
+        return new ArrayDeclaration(
             array_map(
-                fn(ConstExprArrayItemNode $item): ArrayElement => new ArrayElement(
-                    key: $item->key === null ? null : $this->compile($item->key),
-                    value: $this->compile($item->value),
-                ),
+                fn(ConstExprArrayItemNode $item): AppendedArrayElement|KeyArrayElement => $item->key === null
+                    ? new AppendedArrayElement($this->compile($item->value))
+                    : new KeyArrayElement($this->compile($item->key), $this->compile($item->value)),
                 $expr->items,
             ),
         );
     }
 
-    private function compileConstFetch(ConstFetchNode $expr): Expression
+    private function compileConstFetch(ConstFetchNode $expr): ConstantExpression
     {
         if ($expr->className !== '') {
             return new ClassConstantFetch(
                 class: $this->compileClassName($expr->className),
-                name: Value::from($expr->name),
+                name: new Value($expr->name),
             );
         }
 
         return match ($expr->name) {
             '__LINE__' => self::compileNodeLine($expr),
-            '__FILE__' => $this->context->magicFile(),
-            '__DIR__' => $this->context->magicDir(),
-            '__NAMESPACE__' => $this->context->magicNamespace(),
-            '__FUNCTION__' => $this->context->magicFunction(),
-            '__CLASS__' => $this->context->magicClass(),
-            '__TRAIT__' => $this->context->magicTrait(),
-            '__METHOD__' => $this->context->magicMethod(),
+            '__FILE__' => $this->constantExpressionContext->__FILE__(),
+            '__DIR__' => $this->constantExpressionContext->__DIR__(),
+            '__NAMESPACE__' => $this->constantExpressionContext->__NAMESPACE__(),
+            '__FUNCTION__' => $this->constantExpressionContext->__FUNCTION__(),
+            '__CLASS__' => $this->constantExpressionContext->__CLASS__(),
+            '__TRAIT__' => $this->constantExpressionContext->__TRAIT__(),
+            '__METHOD__' => $this->constantExpressionContext->__METHOD__(),
             default => new ConstantFetch(...$this->context->resolveConstantName($expr->name)),
         };
     }
@@ -102,24 +98,24 @@ final class PhpDocConstantExpressionCompiler
     /**
      * @param non-empty-string $name
      */
-    private function compileClassName(string $name): Expression
+    private function compileClassName(string $name): ConstantExpression
     {
         return match (strtolower($name)) {
-            'self' => $this->context->self(),
-            'parent' => $this->context->parent(),
-            'static' => $this->context->static(),
-            default => Value::from($this->context->resolveClassName($name)),
+            'self' => $this->constantExpressionContext->self(),
+            'parent' => $this->constantExpressionContext->parent(),
+            'static' => $this->constantExpressionContext->static(),
+            default => new Value($this->context->resolveClassName($name)->name),
         };
     }
 
     /**
-     * @return Expression<positive-int>
+     * @return ConstantExpression<positive-int>
      */
-    private static function compileNodeLine(ConstExprNode $expr): Expression
+    private static function compileNodeLine(ConstExprNode $expr): ConstantExpression
     {
         $line = $expr->getAttribute(Attribute::START_LINE);
         \assert(\is_int($line) && $line > 0);
 
-        return Value::from($line);
+        return new Value($line);
     }
 }

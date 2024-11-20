@@ -22,11 +22,7 @@ final class FunctionFixtures
             return self::$functions;
         }
 
-        $functions = [
-            'time',
-            'trim',
-            ...self::loadFromFile(__DIR__ . '/Fixtures/functions.php'),
-        ];
+        $functions = self::loadFromFile(__DIR__ . '/Fixtures/functions.php');
 
         if (\PHP_VERSION_ID >= 80200) {
             $functions = [...$functions, ...self::loadFromFile(__DIR__ . '/Fixtures/functions_php82.php')];

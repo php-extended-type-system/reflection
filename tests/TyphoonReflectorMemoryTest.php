@@ -18,8 +18,8 @@ final class TyphoonReflectorMemoryTest extends TestCase
         }
 
         $reflector = TyphoonReflector::build();
-        $reflection = $reflector->reflectClass(\AppendIterator::class);
         $weakReflector = \WeakReference::create($reflector);
+        $reflection = $reflector->reflectClass(\BackedEnum::class);
         $weakReflection = \WeakReference::create($reflection);
 
         unset($reflection, $reflector);

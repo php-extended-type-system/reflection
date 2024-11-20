@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace Typhoon\Reflection\Internal\NativeAdapter;
 
 use Typhoon\DeclarationId\AnonymousFunctionId;
+use Typhoon\DeclarationId\MethodId;
 use Typhoon\DeclarationId\NamedFunctionId;
-use Typhoon\Reflection\Internal\ConstantExpression\ClassConstantFetch;
-use Typhoon\Reflection\Internal\ConstantExpression\ConstantFetch;
-use Typhoon\Reflection\Internal\ConstantExpression\MagicClassInTrait;
-use Typhoon\Reflection\Internal\ConstantExpression\ParentClass;
-use Typhoon\Reflection\Internal\ConstantExpression\SelfClass;
-use Typhoon\Reflection\Internal\Data;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
 use Typhoon\Reflection\Internal\Type\IsNativeTypeNullable;
 use Typhoon\Reflection\ParameterReflection;
 use Typhoon\Reflection\TypeKind;
@@ -28,6 +24,7 @@ final class ParameterAdapter extends \ReflectionParameter
     public function __construct(
         private readonly ParameterReflection $reflection,
         private readonly TyphoonReflector $reflector,
+        private readonly ?ConstantExpression $default,
     ) {
         unset($this->name);
     }
@@ -81,13 +78,19 @@ final class ParameterAdapter extends \ReflectionParameter
 
     public function getDeclaringClass(): ?\ReflectionClass
     {
-        $declaringFunction = $this->getDeclaringFunction();
+        $methodId = $this->reflection->declarationId->function;
 
-        if ($declaringFunction instanceof \ReflectionMethod) {
-            return $declaringFunction->getDeclaringClass();
+        if (!$methodId instanceof MethodId) {
+            return null;
         }
 
-        return null;
+        $declaringClass = $this->reflector->reflectClass($methodId->class);
+
+        if ($declaringClass->isAnonymous() || $declaringClass->isTrait()) {
+            return $this->reflection->class()?->toNativeReflection();
+        }
+
+        return $declaringClass->toNativeReflection();
     }
 
     public function getDeclaringFunction(): \ReflectionFunctionAbstract
@@ -102,35 +105,10 @@ final class ParameterAdapter extends \ReflectionParameter
 
     public function getDefaultValueConstantName(): ?string
     {
-        $expression = $this->reflection->data[Data::DefaultValueExpression];
+        $this->loadNative();
 
-        if ($expression instanceof MagicClassInTrait) {
-            return '__CLASS__';
-        }
-
-        if ($expression instanceof ConstantFetch) {
-            return $expression->name($this->reflector);
-        }
-
-        if ($expression instanceof ClassConstantFetch) {
-            $name = $expression->evaluateName($this->reflector);
-
-            if ($name === 'class') {
-                return null;
-            }
-
-            if ($expression->class instanceof SelfClass) {
-                return 'self::' . $name;
-            }
-
-            if ($expression->class instanceof ParentClass) {
-                return 'parent::' . $name;
-            }
-
-            return $expression->evaluateClass($this->reflector) . '::' . $name;
-        }
-
-        return null;
+        // TODO
+        return parent::getDefaultValueConstantName();
     }
 
     public function getName(): string
@@ -174,11 +152,10 @@ final class ParameterAdapter extends \ReflectionParameter
 
     public function isDefaultValueConstant(): bool
     {
-        $expression = $this->reflection->data[Data::DefaultValueExpression];
+        $this->loadNative();
 
-        return $expression instanceof ConstantFetch
-            || $expression instanceof MagicClassInTrait
-            || ($expression instanceof ClassConstantFetch && $expression->evaluateName($this->reflector) !== 'class');
+        // TODO
+        return parent::isDefaultValueConstant();
     }
 
     public function isOptional(): bool

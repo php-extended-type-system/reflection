@@ -4,456 +4,192 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection;
 
-use PhpParser\Parser;
 use PhpParser\ParserFactory;
-use Psr\SimpleCache\CacheInterface;
-use Typhoon\DeclarationId\AliasId;
 use Typhoon\DeclarationId\AnonymousClassId;
-use Typhoon\DeclarationId\ClassConstantId;
 use Typhoon\DeclarationId\ConstantId;
 use Typhoon\DeclarationId\Id;
-use Typhoon\DeclarationId\Internal\IdMap;
-use Typhoon\DeclarationId\MethodId;
 use Typhoon\DeclarationId\NamedClassId;
 use Typhoon\DeclarationId\NamedFunctionId;
-use Typhoon\DeclarationId\ParameterId;
-use Typhoon\DeclarationId\PropertyId;
-use Typhoon\DeclarationId\TemplateId;
-use Typhoon\PhpStormReflectionStubs\PhpStormStubsLocator;
-use Typhoon\Reflection\Annotated\CustomTypeResolver;
-use Typhoon\Reflection\Annotated\CustomTypeResolvers;
-use Typhoon\Reflection\Exception\DeclarationNotFound;
-use Typhoon\Reflection\Internal\Cache\Cache;
-use Typhoon\Reflection\Internal\Cache\InMemoryPsr16Cache;
-use Typhoon\Reflection\Internal\CompleteReflection\CleanUpInternallyDefined;
-use Typhoon\Reflection\Internal\CompleteReflection\CompleteEnum;
-use Typhoon\Reflection\Internal\CompleteReflection\CopyPromotedParameterToProperty;
-use Typhoon\Reflection\Internal\CompleteReflection\RemoveCode;
-use Typhoon\Reflection\Internal\CompleteReflection\RemoveContext;
-use Typhoon\Reflection\Internal\CompleteReflection\SetAttributeRepeated;
-use Typhoon\Reflection\Internal\CompleteReflection\SetClassCloneable;
-use Typhoon\Reflection\Internal\CompleteReflection\SetInterfaceMethodAbstract;
-use Typhoon\Reflection\Internal\CompleteReflection\SetParameterIndex;
-use Typhoon\Reflection\Internal\CompleteReflection\SetParameterOptional;
-use Typhoon\Reflection\Internal\CompleteReflection\SetReadonlyClassPropertyReadonly;
-use Typhoon\Reflection\Internal\CompleteReflection\SetStringableInterface;
-use Typhoon\Reflection\Internal\CompleteReflection\SetTemplateIndex;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Hook\Hooks;
-use Typhoon\Reflection\Internal\Inheritance\ResolveClassInheritance;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
-use Typhoon\Reflection\Internal\NativeReflector\DefinedConstantReflector;
-use Typhoon\Reflection\Internal\NativeReflector\NativeReflectionBasedReflector;
-use Typhoon\Reflection\Internal\PhpDoc\PhpDocReflector;
-use Typhoon\Reflection\Internal\PhpParser\CodeReflector;
-use Typhoon\Reflection\Internal\PhpParser\NodeReflector;
-use Typhoon\Reflection\Locator\AnonymousLocator;
+use Typhoon\Reflection\Internal\ClassReflector;
+use Typhoon\Reflection\Internal\ConstantReflector;
+use Typhoon\Reflection\Internal\FileParser;
+use Typhoon\Reflection\Internal\FunctionReflector;
+use Typhoon\Reflection\Internal\Metadata\MetadataLoader;
+use Typhoon\Reflection\Internal\Metadata\MetadataParsers;
+use Typhoon\Reflection\Internal\Metadata\StubsAwareMetadataLoader;
+use Typhoon\Reflection\Internal\PhpDoc\PHPStanPhpDocDriver;
+use Typhoon\Reflection\Internal\PhpParser\CodeParser;
+use Typhoon\Reflection\Locator\ClassLocator;
 use Typhoon\Reflection\Locator\ComposerLocator;
 use Typhoon\Reflection\Locator\ConstantLocator;
-use Typhoon\Reflection\Locator\FileAnonymousLocator;
+use Typhoon\Reflection\Locator\FunctionLocator;
 use Typhoon\Reflection\Locator\Locators;
-use Typhoon\Reflection\Locator\NamedClassLocator;
-use Typhoon\Reflection\Locator\NamedFunctionLocator;
-use Typhoon\Reflection\Locator\NativeReflectionClassLocator;
-use Typhoon\Reflection\Locator\NativeReflectionFunctionLocator;
-use Typhoon\Reflection\Locator\NoSymfonyPolyfillLocator;
-use Typhoon\Reflection\Locator\OnlyLoadedClassLocator;
-use Typhoon\Reflection\Locator\Resource;
-use Typhoon\Reflection\Locator\ScannedResourceLocator;
-use Typhoon\TypedMap\TypedMap;
+use Typhoon\Reflection\Metadata\ClassMetadataParser;
+use Typhoon\Reflection\Metadata\ConstantMetadataParser;
+use Typhoon\Reflection\Metadata\CustomTypeResolver;
+use Typhoon\Reflection\Metadata\CustomTypeResolvers;
+use Typhoon\Reflection\Metadata\FunctionMetadataParser;
+use Typhoon\Reflection\Metadata\TypesDiscoverer;
+use Typhoon\Reflection\Metadata\TypesDiscoverers;
+use Typhoon\Reflection\PhpStormStubs\PhpStormStubsLocator;
 
 /**
  * @api
+ * @psalm-type Attributes = Collection<non-negative-int, AttributeReflection>
+ * @psalm-type Templates = Collection<non-empty-string, TemplateReflection>
+ * @psalm-type ClassConstants = Collection<non-empty-string, ClassConstantReflection>
+ * @psalm-type Properties = Collection<non-empty-string, PropertyReflection>
+ * @psalm-type Parameters = Collection<non-empty-string, ParameterReflection>
+ * @psalm-type Methods = Collection<non-empty-string, MethodReflection>
  */
 final class TyphoonReflector
 {
-    use NonSerializable;
-    private const BUFFER_SIZE = 300;
+    /**
+     * @return list<ConstantLocator|FunctionLocator|ClassLocator>
+     */
+    public static function defaultLocators(): array
+    {
+        return [new ComposerLocator()];
+    }
 
     /**
-     * @param ?iterable<ConstantLocator|NamedFunctionLocator|NamedClassLocator|AnonymousLocator> $locators
+     * @return list<File|iterable<File>|ConstantLocator|FunctionLocator|ClassLocator>
+     */
+    public static function defaultStubsLocators(): array
+    {
+        return [new PhpStormStubsLocator()];
+    }
+
+    /**
+     * @return list<TypesDiscoverer>
+     */
+    public static function defaultTypesDiscoverers(): array
+    {
+        return [new PHPStanPhpDocDriver()];
+    }
+
+    /**
+     * @return list<ConstantMetadataParser|FunctionMetadataParser|ClassMetadataParser>
+     */
+    public static function defaultMetadataParsers(): array
+    {
+        return [new PHPStanPhpDocDriver()];
+    }
+
+    /**
+     * @param ?iterable<ConstantLocator|FunctionLocator|ClassLocator> $locators
+     * @param ?iterable<File|iterable<File>|ConstantLocator|FunctionLocator|ClassLocator> $stubsLocators
+     * @param ?iterable<TypesDiscoverer> $typesDiscoverers
+     * @param ?iterable<ConstantMetadataParser|FunctionMetadataParser|ClassMetadataParser> $metadataParsers
      * @param iterable<CustomTypeResolver> $customTypeResolvers
      */
     public static function build(
         ?iterable $locators = null,
-        ?CacheInterface $cache = null,
+        ?iterable $stubsLocators = null,
+        ?iterable $typesDiscoverers = null,
+        ?iterable $metadataParsers = null,
         iterable $customTypeResolvers = [],
-        ?Parser $phpParser = null,
     ): self {
-        $phpDocReflector = new PhpDocReflector(new CustomTypeResolvers($customTypeResolvers));
+        $codeParser = new CodeParser(
+            phpParser: (new ParserFactory())->createForHostVersion(),
+            typesDiscoverer: new TypesDiscoverers($typesDiscoverers ?? self::defaultTypesDiscoverers()),
+        );
 
         return new self(
-            codeReflector: new CodeReflector(
-                phpParser: $phpParser ?? (new ParserFactory())->createForHostVersion(),
-                annotatedDeclarationsDiscoverer: $phpDocReflector,
-                nodeReflector: new NodeReflector(),
+            locator: new Locators($locators ?? self::defaultLocators()),
+            codeParser: $codeParser,
+            metadataLoader: new StubsAwareMetadataLoader(
+                codeParser: $codeParser,
+                metadataLoader: new MetadataParsers(
+                    metadataParsers: $metadataParsers ?? self::defaultMetadataParsers(),
+                    customTypeResolver: new CustomTypeResolvers($customTypeResolvers),
+                ),
+                locators: $stubsLocators ?? self::defaultStubsLocators(),
             ),
-            locators: new Locators($locators ?? self::defaultLocators()),
-            hooks: new Hooks([
-                $phpDocReflector,
-                CopyPromotedParameterToProperty::Instance,
-                CompleteEnum::Instance,
-                SetStringableInterface::Instance,
-                SetInterfaceMethodAbstract::Instance,
-                SetClassCloneable::Instance,
-                SetReadonlyClassPropertyReadonly::Instance,
-                SetAttributeRepeated::Instance,
-                SetParameterIndex::Instance,
-                SetParameterOptional::Instance,
-                SetTemplateIndex::Instance,
-                ResolveClassInheritance::Instance,
-                RemoveContext::Instance,
-                RemoveCode::Instance,
-                CleanUpInternallyDefined::Instance,
-            ]),
-            cache: new Cache($cache ?? self::defaultInMemoryCache()),
         );
     }
 
-    /**
-     * @return list<ConstantLocator|NamedFunctionLocator|NamedClassLocator|AnonymousLocator>
-     */
-    public static function defaultLocators(): array
-    {
-        $locators = [];
+    private readonly FileParser $fileParser;
 
-        if (class_exists(PhpStormStubsLocator::class)) {
-            $locators[] = new PhpStormStubsLocator();
-        }
+    private readonly ConstantReflector $constantReflector;
 
-        $locators[] = new OnlyLoadedClassLocator(new NativeReflectionClassLocator());
-        $locators[] = new NativeReflectionFunctionLocator();
-        $locators[] = new FileAnonymousLocator();
+    private readonly FunctionReflector $functionReflector;
 
-        if (ComposerLocator::isSupported()) {
-            $locators[] = new NoSymfonyPolyfillLocator(new ComposerLocator());
-        }
+    private readonly ClassReflector $classReflector;
 
-        return $locators;
-    }
-
-    public static function defaultInMemoryCache(): CacheInterface
-    {
-        return new InMemoryPsr16Cache();
-    }
-
-    /**
-     * @param IdMap<ConstantId|NamedFunctionId|NamedClassId|AnonymousClassId, \Closure(self): TypedMap> $buffer
-     */
     private function __construct(
-        private readonly CodeReflector $codeReflector,
-        private Locators $locators,
-        private readonly Hooks $hooks,
-        private readonly Cache $cache,
-        private readonly DefinedConstantReflector $definedConstantReflector = new DefinedConstantReflector(),
-        private IdMap $buffer = new IdMap(),
-    ) {}
-
-    /**
-     * @param non-empty-string $name
-     */
-    public function reflectConstant(string $name): ConstantReflection
-    {
-        return $this->reflect(Id::constant($name));
-    }
-
-    /**
-     * @param non-empty-string $name
-     * @psalm-assert-if-true callable-string $name
-     */
-    public function functionExists(string $name): bool
-    {
-        try {
-            $this->reflectFunction($name);
-
-            return true;
-        } catch (DeclarationNotFound) {
-            return false;
-        }
-    }
-
-    /**
-     * @template T of object
-     * @param non-empty-string $name
-     * @throws DeclarationNotFound
-     */
-    public function reflectFunction(string $name): FunctionReflection
-    {
-        return $this->reflect(Id::namedFunction($name));
-    }
-
-    /**
-     * @param non-empty-string $class
-     * @psalm-assert-if-true class-string $class
-     */
-    public function classExists(string $class): bool
-    {
-        try {
-            $this->reflectClass($class);
-
-            return true;
-        } catch (DeclarationNotFound) {
-            return false;
-        }
-    }
-
-    /**
-     * @template TObject of object
-     * @param non-empty-string|class-string<TObject> $name
-     * @return ($name is class-string<TObject>
-     *     ? ClassReflection<TObject, NamedClassId<class-string<TObject>>|AnonymousClassId<class-string<TObject>>>
-     *     : ClassReflection<object, NamedClassId<class-string>|AnonymousClassId<?class-string>>)
-     * @throws DeclarationNotFound
-     */
-    public function reflectClass(string $name): ClassReflection
-    {
-        return $this->reflect(Id::class($name));
-    }
-
-    /**
-     * @param non-empty-string $file
-     * @param positive-int $line
-     * @param ?positive-int $column
-     * @return ClassReflection<object, AnonymousClassId<null>>
-     * @throws DeclarationNotFound
-     */
-    public function reflectAnonymousClass(string $file, int $line, ?int $column = null): ClassReflection
-    {
-        /** @var ClassReflection<object, AnonymousClassId<null>> */
-        return $this->reflect(Id::anonymousClass($file, $line, $column));
-    }
-
-    /**
-     * @psalm-suppress InvalidReturnType, InvalidReturnStatement
-     * @return (
-     *     $id is ConstantId ? ConstantReflection :
-     *     $id is NamedFunctionId ? FunctionReflection :
-     *     $id is NamedClassId ? ClassReflection<object, NamedClassId<class-string>> :
-     *     $id is AnonymousClassId<null> ? ClassReflection<object, AnonymousClassId<null>> :
-     *     $id is AnonymousClassId<class-string> ? ClassReflection<object, AnonymousClassId<class-string>> :
-     *     $id is ClassConstantId ? ClassConstantReflection :
-     *     $id is PropertyId ? PropertyReflection :
-     *     $id is MethodId ? MethodReflection :
-     *     $id is ParameterId ? ParameterReflection :
-     *     $id is AliasId ? AliasReflection :
-     *     $id is TemplateId ? TemplateReflection :
-     *     never
-     * )
-     * @throws DeclarationNotFound
-     */
-    public function reflect(Id $id): ConstantReflection|FunctionReflection|ClassReflection|ClassConstantReflection|PropertyReflection|MethodReflection|ParameterReflection|AliasReflection|TemplateReflection
-    {
-        try {
-            if ($id instanceof NamedClassId || $id instanceof AnonymousClassId) {
-                /** @var NamedClassId<class-string>|AnonymousClassId<?class-string> $id */
-                return new ClassReflection($id, $this->reflectClassData($id), $this);
-            }
-
-            if ($id instanceof NamedFunctionId) {
-                return new FunctionReflection($id, $this->reflectFunctionData($id), $this);
-            }
-
-            if ($id instanceof ConstantId) {
-                return new ConstantReflection($id, $this->reflectConstantData($id), $this);
-            }
-        } finally {
-            if ($this->buffer->count() > self::BUFFER_SIZE) {
-                $this->buffer = $this->buffer->slice(-self::BUFFER_SIZE);
-            }
-        }
-
-        return match (true) {
-            $id instanceof PropertyId => $this->reflect($id->class)->properties()[$id->name],
-            $id instanceof ClassConstantId => $this->reflect($id->class)->constants()[$id->name],
-            $id instanceof MethodId => $this->reflect($id->class)->methods()[$id->name],
-            $id instanceof ParameterId => $this->reflect($id->function)->parameters()[$id->name],
-            $id instanceof AliasId => $this->reflect($id->class)->aliases()[$id->name],
-            $id instanceof TemplateId => $this->reflect($id->declaration)->templates()[$id->name],
-            default => throw new \LogicException($id->describe() . ' is not supported yet'),
-        };
-    }
-
-    public function withResource(Resource $resource): self
-    {
-        $reflectedResource = $this->reflectResource($resource);
-
-        $copy = clone $this;
-        $copy->locators = $this->locators->with(new ScannedResourceLocator($reflectedResource->ids(), $resource));
-        $copy->buffer = $this->buffer->withMap($reflectedResource);
-
-        return $copy;
-    }
-
-    private function reflectConstantData(ConstantId $id): TypedMap
-    {
-        $buffered = $this->buffer[$id] ?? null;
-
-        if ($buffered !== null) {
-            return $buffered($this);
-        }
-
-        $cachedData = $this->cache->get($id);
-
-        if ($cachedData !== null) {
-            return $cachedData;
-        }
-
-        $resource = $this->locators->locate($id);
-
-        if ($resource !== null) {
-            $this->buffer = $this->buffer->withMap($this->reflectResource($resource));
-
-            return ($this->buffer[$id] ?? throw new DeclarationNotFound($id))($this);
-        }
-
-        $nativeData = $this->definedConstantReflector->reflectConstant($id);
-
-        if ($nativeData !== null) {
-            $this->cache->set($id, $nativeData);
-
-            return $nativeData;
-        }
-
-        throw new DeclarationNotFound($id);
-    }
-
-    private function reflectFunctionData(NamedFunctionId $id): TypedMap
-    {
-        $buffered = $this->buffer[$id] ?? null;
-
-        if ($buffered !== null) {
-            return $buffered($this);
-        }
-
-        $cachedData = $this->cache->get($id);
-
-        if ($cachedData !== null) {
-            return $cachedData;
-        }
-
-        $resource = $this->locators->locate($id);
-
-        if ($resource !== null) {
-            $this->buffer = $this->buffer->withMap($this->reflectResource($resource));
-
-            return ($this->buffer[$id] ?? throw new DeclarationNotFound($id))($this);
-        }
-
-        $nativeData = NativeReflectionBasedReflector::reflectNamedFunction($id);
-
-        if ($nativeData !== null) {
-            $this->cache->set($id, $nativeData);
-
-            return $nativeData;
-        }
-
-        throw new DeclarationNotFound($id);
-    }
-
-    private function reflectClassData(NamedClassId|AnonymousClassId $id): TypedMap
-    {
-        $buffered = $this->buffer[$id] ?? null;
-
-        if ($buffered !== null) {
-            return $buffered($this);
-        }
-
-        $cachedData = $this->cache->get($id);
-
-        if ($cachedData !== null) {
-            return $cachedData;
-        }
-
-        $resource = $this->locators->locate($id);
-
-        if ($resource !== null) {
-            $this->buffer = $this->buffer->withMap($this->reflectResource($resource));
-
-            return ($this->buffer[$id] ?? throw new DeclarationNotFound($id))($this);
-        }
-
-        if ($id instanceof NamedClassId) {
-            $nativeData = NativeReflectionBasedReflector::reflectNamedClass($id);
-
-            if ($nativeData !== null) {
-                $this->cache->set($id, $nativeData);
-
-                return $nativeData;
-            }
-        }
-
-        throw new DeclarationNotFound($id);
-    }
-
-    /**
-     * @return IdMap<ConstantId|NamedFunctionId|NamedClassId|AnonymousClassId, \Closure(self): TypedMap>
-     */
-    private function reflectResource(Resource $resource): IdMap
-    {
-        $code = $resource->data[Data::Code];
-        $file = $resource->data[Data::File];
-
-        $baseData = $resource->data;
-        $hooks = $this->hooks->merge($resource->hooks);
-
-        $idReflectors = $this->codeReflector->reflectCode($code, $file)->map(
-            static fn(\Closure $idReflector, ConstantId|NamedFunctionId|NamedClassId|AnonymousClassId $id): \Closure =>
-                static function (self $reflector) use ($id, $idReflector, $baseData, $hooks): TypedMap {
-                    static $started = false;
-
-                    if ($started) {
-                        throw new \LogicException(\sprintf('Infinite recursive reflection of %s detected', $id->describe()));
-                    }
-
-                    $started = true;
-
-                    $data = $baseData->withMap($idReflector());
-                    $data = $hooks->process($id, $data, $reflector);
-
-                    $reflector->cache->set($id, $data);
-                    $reflector->buffer = $reflector->buffer->without($id);
-
-                    return $data;
-                },
+        private readonly Locators $locator,
+        private readonly CodeParser $codeParser,
+        private readonly MetadataLoader $metadataLoader,
+    ) {
+        $this->fileParser = new FileParser($codeParser);
+        $this->constantReflector = new ConstantReflector(
+            locator: $locator,
+            fileParser: $this->fileParser,
+            metadataLoader: $metadataLoader,
         );
+        $this->functionReflector = new FunctionReflector(
+            locator: $locator,
+            fileParser: $this->fileParser,
+            metadataLoader: $metadataLoader,
+        );
+        $this->classReflector = new ClassReflector(
+            locator: $locator,
+            fileParser: $this->fileParser,
+            metadataLoader: $metadataLoader,
+        );
+    }
 
-        return $idReflectors->withMap(self::reflectAnonymousClassesWithoutColumn($idReflectors->ids()));
+    public function withFile(File $file): self
+    {
+        $reflector = new self(
+            locator: $this->locator,
+            codeParser: $this->codeParser,
+            metadataLoader: $this->metadataLoader,
+        );
+        $reflector->fileParser->parseFile($file);
+
+        return $reflector;
     }
 
     /**
-     * @param list<Id> $ids
-     * @return IdMap<AnonymousClassId, \Closure(self): TypedMap>
+     * @param non-empty-string|ConstantId $id
      */
-    private static function reflectAnonymousClassesWithoutColumn(array $ids): IdMap
+    public function reflectConstant(string|ConstantId $id): ConstantReflection
     {
-        return new IdMap((static function () use ($ids): \Generator {
-            $lineToIds = [];
+        if (\is_string($id)) {
+            $id = Id::constant($id);
+        }
 
-            foreach ($ids as $id) {
-                if ($id instanceof AnonymousClassId) {
-                    $lineToIds[$id->line][] = $id;
-                }
-            }
+        return $this->constantReflector->reflect($id)->__load($this);
+    }
 
-            foreach ($lineToIds as $idsOnLine) {
-                $idWithoutColumn = $idsOnLine[0]->withoutColumn();
+    /**
+     * @param non-empty-string|NamedFunctionId $id
+     */
+    public function reflectFunction(string|NamedFunctionId $id): FunctionReflection
+    {
+        if (\is_string($id)) {
+            $id = Id::namedFunction($id);
+        }
 
-                if (\count($idsOnLine) === 1) {
-                    yield $idWithoutColumn => static fn(self $reflector): TypedMap => $reflector->reflectClassData($idsOnLine[0]);
+        return $this->functionReflector->reflect($id)->__load($this);
+    }
 
-                    continue;
-                }
+    /**
+     * @param non-empty-string|AnonymousClassId|NamedClassId $id
+     */
+    public function reflectClass(string|AnonymousClassId|NamedClassId $id): ClassReflection
+    {
+        if (\is_string($id)) {
+            $id = Id::class($id);
+        }
 
-                yield $idWithoutColumn => static function () use ($idWithoutColumn, $idsOnLine): never {
-                    throw new \RuntimeException(\sprintf(
-                        'Cannot reflect %s, because %d anonymous classes are declared at columns %s. ' .
-                        'Use TyphoonReflector::reflectAnonymousClass() with a $column argument to reflect the exact class you need',
-                        $idWithoutColumn->describe(),
-                        \count($idsOnLine),
-                        implode(', ', array_column($idsOnLine, 'column')),
-                    ));
-                };
-            }
-        })());
+        /** @var NamedClassId<class-string>|AnonymousClassId<?class-string> $id */
+        if ($id instanceof AnonymousClassId) {
+            return $this->classReflector->reflectAnonymous($id)->__load($this, $id);
+        }
+
+        return $this->classReflector->reflectNamed($id)->__load($this, $id);
     }
 }

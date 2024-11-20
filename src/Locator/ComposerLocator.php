@@ -6,26 +6,24 @@ namespace Typhoon\Reflection\Locator;
 
 use Composer\Autoload\ClassLoader;
 use Typhoon\DeclarationId\NamedClassId;
+use Typhoon\Reflection\File;
 
 /**
  * @api
  */
-final class ComposerLocator implements NamedClassLocator
+final class ComposerLocator implements ClassLocator
 {
-    public static function isSupported(): bool
+    public function locateClass(NamedClassId $id): ?File
     {
-        return class_exists(ClassLoader::class);
-    }
+        if (!class_exists(ClassLoader::class)) {
+            return null;
+        }
 
-    public function locate(NamedClassId $id): ?Resource
-    {
         foreach (ClassLoader::getRegisteredLoaders() as $loader) {
             $file = $loader->findFile($id->name);
 
             if ($file !== false) {
-                \assert($file !== '');
-
-                return Resource::fromFile($file);
+                return new File($file);
             }
         }
 

@@ -198,16 +198,16 @@
         },
         {
             "name": "symfony/console",
-            "version": "v6.4.12",
+            "version": "v6.4.15",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/console.git",
-                "reference": "72d080eb9edf80e36c19be61f72c98ed8273b765"
+                "reference": "f1fc6f47283e27336e7cebb9e8946c8de7bff9bd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/console/zipball/72d080eb9edf80e36c19be61f72c98ed8273b765",
-                "reference": "72d080eb9edf80e36c19be61f72c98ed8273b765",
+                "url": "https://api.github.com/repos/symfony/console/zipball/f1fc6f47283e27336e7cebb9e8946c8de7bff9bd",
+                "reference": "f1fc6f47283e27336e7cebb9e8946c8de7bff9bd",
                 "shasum": ""
             },
             "require": {
@@ -272,7 +272,7 @@
                 "terminal"
             ],
             "support": {
-                "source": "https://github.com/symfony/console/tree/v6.4.12"
+                "source": "https://github.com/symfony/console/tree/v6.4.15"
             },
             "funding": [
                 {
@@ -288,7 +288,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-09-20T08:15:52+00:00"
+            "time": "2024-11-06T14:19:14+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -760,16 +760,16 @@
         },
         {
             "name": "symfony/string",
-            "version": "v6.4.12",
+            "version": "v6.4.15",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/string.git",
-                "reference": "f8a1ccebd0997e16112dfecfd74220b78e5b284b"
+                "reference": "73a5e66ea2e1677c98d4449177c5a9cf9d8b4c6f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/string/zipball/f8a1ccebd0997e16112dfecfd74220b78e5b284b",
-                "reference": "f8a1ccebd0997e16112dfecfd74220b78e5b284b",
+                "url": "https://api.github.com/repos/symfony/string/zipball/73a5e66ea2e1677c98d4449177c5a9cf9d8b4c6f",
+                "reference": "73a5e66ea2e1677c98d4449177c5a9cf9d8b4c6f",
                 "shasum": ""
             },
             "require": {
@@ -826,7 +826,7 @@
                 "utf8"
             ],
             "support": {
-                "source": "https://github.com/symfony/string/tree/v6.4.12"
+                "source": "https://github.com/symfony/string/tree/v6.4.15"
             },
             "funding": [
                 {
@@ -842,7 +842,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-09-20T08:15:52+00:00"
+            "time": "2024-11-13T13:31:12+00:00"
         },
         {
             "name": "webmozart/assert",

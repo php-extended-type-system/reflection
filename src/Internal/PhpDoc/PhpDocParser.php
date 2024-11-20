@@ -90,8 +90,7 @@ final class PhpDocParser
     }
 
     /**
-     * @psalm-suppress UnusedParam, UnusedVariable
-     * @param non-empty-string $phpDoc
+     * @psalm-suppress UnusedVariable
      * @param positive-int $startLine
      * @param non-negative-int $startPosition
      */

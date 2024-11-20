@@ -1,13 +1,7 @@
 # Implementing custom types
 
 ```php
-use Typhoon\Reflection\Annotated\CustomTypeResolver;
-use Typhoon\Reflection\Annotated\TypeContext;
-use Typhoon\Reflection\TyphoonReflector;
-use Typhoon\Type\Type;
-use Typhoon\Type\types;
-use Typhoon\Type\TypeVisitor;
-use function Typhoon\Type\stringify;
+use Typhoon\Reflection\Metadata\CustomTypeResolver;use Typhoon\Reflection\Metadata\TypeContext;use Typhoon\Reflection\TyphoonReflector;use Typhoon\Type\Type;use Typhoon\Type\types;use Typhoon\Type\TypeVisitor;use function Typhoon\Type\stringify;
 
 /**
  * @implements Type<int|float>

@@ -18,5 +18,6 @@ return static function (TyphoonReflector $reflector): void {
     assertSame(__FILE__, $id->file);
     assertSame(13, $id->line);
     assertNull($id->column);
+    /** @psalm-suppress DocblockTypeContradiction */
     assertSame($object::class, $id->name);
 };

@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection\Locator;
 
-use Typhoon\DeclarationId\AnonymousClassId;
-use Typhoon\DeclarationId\AnonymousFunctionId;
 use Typhoon\DeclarationId\ConstantId;
 use Typhoon\DeclarationId\NamedClassId;
 use Typhoon\DeclarationId\NamedFunctionId;
+use Typhoon\Reflection\File;
 
 /**
  * @api
  */
-final class Locators implements ConstantLocator, NamedFunctionLocator, NamedClassLocator, AnonymousLocator
+final class Locators implements ConstantLocator, FunctionLocator, ClassLocator
 {
     /**
      * @var list<ConstantLocator>
@@ -21,76 +20,71 @@ final class Locators implements ConstantLocator, NamedFunctionLocator, NamedClas
     private array $constantLocators = [];
 
     /**
-     * @var list<NamedFunctionLocator>
+     * @var list<FunctionLocator>
      */
-    private array $namedFunctionLocators = [];
+    private array $functionLocators = [];
 
     /**
-     * @var list<NamedClassLocator>
+     * @var list<ClassLocator>
      */
-    private array $namedClassLocators = [];
+    private array $classLocators = [];
 
     /**
-     * @var list<AnonymousLocator>
+     * @param iterable<ConstantLocator|FunctionLocator|ClassLocator> $locators
      */
-    private array $anonymousLocators = [];
-
-    /**
-     * @param iterable<ConstantLocator|NamedFunctionLocator|NamedClassLocator|AnonymousLocator> $locators
-     */
-    public function __construct(iterable $locators)
+    public function __construct(iterable $locators = [])
     {
         foreach ($locators as $locator) {
-            $this->add($locator);
+            if ($locator instanceof ConstantLocator) {
+                $this->constantLocators[] = $locator;
+            }
+
+            if ($locator instanceof FunctionLocator) {
+                $this->functionLocators[] = $locator;
+            }
+
+            if ($locator instanceof ClassLocator) {
+                $this->classLocators[] = $locator;
+            }
         }
     }
 
-    public function locate(ConstantId|NamedFunctionId|AnonymousFunctionId|NamedClassId|AnonymousClassId $id): ?Resource
+    public function locateConstant(ConstantId $id): ?File
     {
-        $locators = match (true) {
-            $id instanceof ConstantId => $this->constantLocators,
-            $id instanceof NamedFunctionId => $this->namedFunctionLocators,
-            $id instanceof NamedClassId => $this->namedClassLocators,
-            $id instanceof AnonymousFunctionId,
-            $id instanceof AnonymousClassId => $this->anonymousLocators,
-        };
+        foreach ($this->constantLocators as $locator) {
+            $file = $locator->locateConstant($id);
 
-        foreach ($locators as $locator) {
-            /** @psalm-suppress PossiblyInvalidArgument */
-            $resource = $locator->locate($id);
-
-            if ($resource !== null) {
-                return $resource;
+            if ($file !== null) {
+                return $file;
             }
         }
 
         return null;
     }
 
-    public function with(ConstantLocator|NamedFunctionLocator|NamedClassLocator|AnonymousLocator $locator): self
+    public function locateFunction(NamedFunctionId $id): ?File
     {
-        $copy = clone $this;
-        $copy->add($locator);
+        foreach ($this->functionLocators as $locator) {
+            $file = $locator->locateFunction($id);
 
-        return $copy;
+            if ($file !== null) {
+                return $file;
+            }
+        }
+
+        return null;
     }
 
-    private function add(ConstantLocator|NamedFunctionLocator|NamedClassLocator|AnonymousLocator $locator): void
+    public function locateClass(NamedClassId $id): ?File
     {
-        if ($locator instanceof ConstantLocator) {
-            $this->constantLocators[] = $locator;
+        foreach ($this->classLocators as $locator) {
+            $file = $locator->locateClass($id);
+
+            if ($file !== null) {
+                return $file;
+            }
         }
 
-        if ($locator instanceof NamedFunctionLocator) {
-            $this->namedFunctionLocators[] = $locator;
-        }
-
-        if ($locator instanceof NamedClassLocator) {
-            $this->namedClassLocators[] = $locator;
-        }
-
-        if ($locator instanceof AnonymousLocator) {
-            $this->anonymousLocators[] = $locator;
-        }
+        return null;
     }
 }

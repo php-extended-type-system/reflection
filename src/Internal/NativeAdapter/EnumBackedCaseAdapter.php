@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection\Internal\NativeAdapter;
 
-use Typhoon\Reflection\ClassConstantReflection;
-
 /**
  * @internal
  * @psalm-internal Typhoon\Reflection
@@ -17,7 +15,7 @@ final class EnumBackedCaseAdapter extends \ReflectionEnumBackedCase
 {
     public function __construct(
         private readonly ClassConstantAdapter $constant,
-        private readonly ClassConstantReflection $reflection,
+        private readonly null|int|string $backingValue,
     ) {
         unset($this->name, $this->class);
     }
@@ -47,7 +45,7 @@ final class EnumBackedCaseAdapter extends \ReflectionEnumBackedCase
 
     public function getBackingValue(): int|string
     {
-        return $this->reflection->enumBackingValue() ?? throw new \ReflectionException('Not a backed enum');
+        return $this->backingValue ?? throw new \ReflectionException('Not a backed enum');
     }
 
     public function getDeclaringClass(): \ReflectionClass

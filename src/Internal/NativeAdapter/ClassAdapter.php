@@ -11,11 +11,9 @@ use Typhoon\Reflection\ClassConstantReflection;
 use Typhoon\Reflection\ClassReflection;
 use Typhoon\Reflection\Collection;
 use Typhoon\Reflection\Exception\DeclarationNotFound;
-use Typhoon\Reflection\Internal\Data;
 use Typhoon\Reflection\MethodReflection;
 use Typhoon\Reflection\ModifierKind;
 use Typhoon\Reflection\PropertyReflection;
-use Typhoon\Reflection\ReflectionCollections;
 use Typhoon\Reflection\TyphoonReflector;
 use function Typhoon\Reflection\Internal\get_namespace;
 use function Typhoon\Reflection\Internal\get_short_name;
@@ -27,8 +25,8 @@ use function Typhoon\Reflection\Internal\get_short_name;
  * @extends \ReflectionClass<T>
  * @property-read class-string<T> $name
  * @psalm-suppress PropertyNotSetInConstructor
- * @psalm-import-type Properties from ReflectionCollections
- * @psalm-import-type Methods from ReflectionCollections
+ * @psalm-import-type Properties from TyphoonReflector
+ * @psalm-import-type Methods from TyphoonReflector
  */
 final class ClassAdapter extends \ReflectionClass
 {
@@ -47,32 +45,14 @@ final class ClassAdapter extends \ReflectionClass
 
     /**
      * @param ClassReflection<T, NamedClassId<class-string<T>>|AnonymousClassId<?class-string<T>>> $reflection
+     * @param list<class-string> $interfaceNames
      */
-    private function __construct(
+    public function __construct(
         private readonly ClassReflection $reflection,
         private readonly TyphoonReflector $reflector,
+        private readonly array $interfaceNames,
     ) {
         unset($this->name);
-    }
-
-    /**
-     * @template TObject of object
-     * @param ClassReflection<TObject, NamedClassId<class-string<TObject>>|AnonymousClassId<?class-string<TObject>>> $reflection
-     * @return \ReflectionClass<TObject>
-     */
-    public static function create(ClassReflection $reflection, TyphoonReflector $reflector): \ReflectionClass
-    {
-        $adapter = new self($reflection, $reflector);
-
-        if ($reflection->isEnum()) {
-            /**
-             * @psalm-suppress ArgumentTypeCoercion
-             * @var \ReflectionClass<TObject>
-             */
-            return new EnumAdapter($adapter, $reflection);
-        }
-
-        return $adapter;
     }
 
     public function __get(string $name): mixed
@@ -137,12 +117,12 @@ final class ClassAdapter extends \ReflectionClass
 
     public function getDocComment(): string|false
     {
-        return $this->reflection->phpDoc() ?? false;
+        return $this->reflection->phpDoc()?->toString() ?? false;
     }
 
     public function getEndLine(): int|false
     {
-        return $this->reflection->location()?->endLine ?? false;
+        return $this->reflection->snippet()?->endLine() ?? false;
     }
 
     public function getExtension(): ?\ReflectionExtension
@@ -163,12 +143,12 @@ final class ClassAdapter extends \ReflectionClass
 
     public function getFileName(): string|false
     {
-        return $this->reflection->file() ?? false;
+        return $this->reflection->file()?->path ?? false;
     }
 
     public function getInterfaceNames(): array
     {
-        return array_keys($this->reflection->data[Data::Interfaces]);
+        return $this->interfaceNames;
     }
 
     public function getInterfaces(): array
@@ -176,7 +156,7 @@ final class ClassAdapter extends \ReflectionClass
         $interfaces = $this->getInterfaceNames();
 
         return array_combine($interfaces, array_map(
-            fn(string $name): \ReflectionClass => $this->reflector->reflect(Id::namedClass($name))->toNativeReflection(),
+            fn(string $interface): \ReflectionClass => $this->reflector->reflectClass($interface)->toNativeReflection(),
             $interfaces,
         ));
     }
@@ -216,7 +196,7 @@ final class ClassAdapter extends \ReflectionClass
     public function getName(): string
     {
         return $this->reflection->id->name ?? throw new \ReflectionException(\sprintf(
-            'Runtime name of anonymous class %s is not available',
+            'Runtime name of %s is not available',
             $this->reflection->id->describe(),
         ));
     }
@@ -295,7 +275,7 @@ final class ClassAdapter extends \ReflectionClass
 
     public function getStartLine(): int|false
     {
-        return $this->reflection->location()?->startLine ?? false;
+        return $this->reflection->snippet()?->startLine() ?? false;
     }
 
     public function getStaticProperties(): array
@@ -314,24 +294,28 @@ final class ClassAdapter extends \ReflectionClass
 
     public function getTraitAliases(): array
     {
-        return $this->reflection->data[NativeTraitInfoKey::Key]->aliases;
+        // todo
+        $this->loadNative();
+
+        return parent::getTraitAliases();
     }
 
     public function getTraitNames(): array
     {
-        /** @var list<trait-string> */
-        return $this->reflection->data[NativeTraitInfoKey::Key]->names;
+        // todo
+        $this->loadNative();
+
+        return parent::getTraitNames();
     }
 
     public function getTraits(): array
     {
-        $traits = [];
+        $traits = $this->getTraitNames();
 
-        foreach ($this->getTraitNames() as $name) {
-            $traits[$name] = $this->reflector->reflect(Id::namedClass($name))->toNativeReflection();
-        }
-
-        return $traits;
+        return array_combine($traits, array_map(
+            fn(string $trait): \ReflectionClass => $this->reflector->reflectClass($trait)->toNativeReflection(),
+            $traits,
+        ));
     }
 
     public function hasConstant(string $name): bool
@@ -363,7 +347,7 @@ final class ClassAdapter extends \ReflectionClass
             }
 
             try {
-                $interfaceReflection = $this->reflector->reflect($interfaceId)->toNativeReflection();
+                $interfaceReflection = $this->reflector->reflectClass($interfaceId)->toNativeReflection();
             } catch (DeclarationNotFound) {
                 throw new \ReflectionException(\sprintf('Interface "%s" does not exist', self::normalizeNameForException($interface)));
             }
@@ -473,7 +457,7 @@ final class ClassAdapter extends \ReflectionClass
             }
 
             try {
-                $this->reflector->reflect($classId);
+                $this->reflector->reflectClass($classId);
             } catch (DeclarationNotFound) {
                 throw new \ReflectionException(\sprintf('Class "%s" does not exist', self::normalizeNameForException($class)));
             }
@@ -530,6 +514,11 @@ final class ClassAdapter extends \ReflectionClass
      */
     private function nativeProperties(): Collection
     {
+        if ($this->name === \UnitEnum::class || $this->name === \BackedEnum::class) {
+            /** @var Properties */
+            return new Collection();
+        }
+
         return $this
             ->reflection
             ->properties()

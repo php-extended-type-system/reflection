@@ -7,13 +7,12 @@ namespace Typhoon\Reflection\Internal\PhpParser;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\NodeVisitorAbstract;
-use Typhoon\Reflection\Internal\ConstantExpression\Expression;
-use Typhoon\Reflection\Internal\Context\ContextProvider;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
 
 final class FindAndCompileVisitor extends NodeVisitorAbstract
 {
     /**
-     * @var array<Expression>
+     * @var array<ConstantExpression>
      */
     public array $expressions = [];
 
@@ -27,10 +26,10 @@ final class FindAndCompileVisitor extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): ?int
     {
-        $compiler = new ConstantExpressionCompiler($this->contextProvider->get());
+        $compiler = new ConstantExpressionParser($this->contextProvider->get());
 
         foreach (($this->expressionFinder)($node) as $key => $expr) {
-            $this->expressions[$key] = $compiler->compile($expr);
+            $this->expressions[$key] = $compiler->parse($expr);
         }
 
         return null;

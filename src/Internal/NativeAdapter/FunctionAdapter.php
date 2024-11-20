@@ -84,12 +84,12 @@ final class FunctionAdapter extends \ReflectionFunction
 
     public function getDocComment(): string|false
     {
-        return $this->reflection->phpDoc() ?? false;
+        return $this->reflection->phpDoc()?->toString() ?? false;
     }
 
     public function getEndLine(): int|false
     {
-        return $this->reflection->location()?->endLine ?? false;
+        return $this->reflection->snippet()?->endLine() ?? false;
     }
 
     public function getExtension(): ?\ReflectionExtension
@@ -110,7 +110,7 @@ final class FunctionAdapter extends \ReflectionFunction
 
     public function getFileName(): string|false
     {
-        return $this->reflection->file() ?? false;
+        return $this->reflection->file()?->path ?? false;
     }
 
     public function getName(): string
@@ -181,7 +181,7 @@ final class FunctionAdapter extends \ReflectionFunction
 
     public function getStartLine(): int|false
     {
-        return $this->reflection->location()?->startLine ?? false;
+        return $this->reflection->snippet()?->startLine() ?? false;
     }
 
     public function getStaticVariables(): array

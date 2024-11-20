@@ -30,9 +30,8 @@ use Typhoon\DeclarationId\AnonymousFunctionId;
 use Typhoon\DeclarationId\Id;
 use Typhoon\DeclarationId\MethodId;
 use Typhoon\DeclarationId\NamedFunctionId;
-use Typhoon\Reflection\Annotated\CustomTypeResolver;
-use Typhoon\Reflection\Annotated\NullCustomTypeResolver;
-use Typhoon\Reflection\Internal\Context\Context;
+use Typhoon\Reflection\Declaration\Context;
+use Typhoon\Reflection\Metadata\CustomTypeResolver;
 use Typhoon\Type\Parameter;
 use Typhoon\Type\ShapeElement;
 use Typhoon\Type\Type;
@@ -45,8 +44,8 @@ use Typhoon\Type\types;
 final class PhpDocTypeReflector
 {
     public function __construct(
-        private readonly Context $context,
-        private readonly CustomTypeResolver $customTypeResolver = new NullCustomTypeResolver(),
+        public readonly Context $context,
+        private readonly CustomTypeResolver $customTypeResolver,
     ) {}
 
     /**
@@ -215,7 +214,7 @@ final class PhpDocTypeReflector
             'void' => types::void,
             'scalar' => types::scalar,
             'never' => types::never,
-            default => match ($class = $this->context->resolveClassName($name)) {
+            default => match (($class = $this->context->resolveClassName($name))->name) {
                 \Traversable::class, \Iterator::class, \IteratorAggregate::class => match ($number = \count($typeArguments)) {
                     1 => types::object($class, [types::mixed, $typeArguments[0]]),
                     0, 2 => types::object($class, $typeArguments),
@@ -403,7 +402,7 @@ final class PhpDocTypeReflector
 
         $class = $this->context->resolveClassName($node->identifier->name);
 
-        if ($class === \Closure::class) {
+        if ($class->name === \Closure::class) {
             return types::Closure(
                 parameters: $this->reflectCallableParameters($node->parameters),
                 return: $this->reflectType($node->returnType),
@@ -458,7 +457,7 @@ final class PhpDocTypeReflector
         $name = ltrim($node->parameterName, '$');
         \assert($name !== '', 'Parameter name must not be empty');
 
-        $id = $this->context->currentId;
+        $id = $this->context->id;
 
         if ($id instanceof NamedFunctionId
          || $id instanceof AnonymousFunctionId

@@ -6,61 +6,69 @@ namespace Typhoon\Reflection;
 
 use Typhoon\ChangeDetector\ChangeDetector;
 use Typhoon\DeclarationId\AnonymousFunctionId;
-use Typhoon\DeclarationId\Id;
 use Typhoon\DeclarationId\NamedFunctionId;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
+use Typhoon\Reflection\Declaration\FunctionDeclaration;
 use Typhoon\Reflection\Internal\NativeAdapter\FunctionAdapter;
+use Typhoon\Reflection\Internal\Reflection\TypeReflection;
+use Typhoon\Reflection\Metadata\FunctionMetadata;
 use Typhoon\Type\Type;
-use Typhoon\TypedMap\TypedMap;
+use Typhoon\Type\types;
 
 /**
  * @api
- * @psalm-import-type Attributes from ReflectionCollections
- * @psalm-import-type Templates from ReflectionCollections
- * @psalm-import-type Parameters from ReflectionCollections
+ * @psalm-import-type Attributes from TyphoonReflector
+ * @psalm-import-type Templates from TyphoonReflector
+ * @psalm-import-type Parameters from TyphoonReflector
  */
 final class FunctionReflection
 {
-    use NonSerializable;
-
-    public readonly AnonymousFunctionId|NamedFunctionId $id;
-
-    /**
-     * This internal property is public for testing purposes.
-     * It will likely be available as part of the API in the near future.
-     *
-     * @internal
-     * @psalm-internal Typhoon
-     */
-    public readonly TypedMap $data;
-
-    /**
-     * @var ?Templates
-     */
-    private ?Collection $templates = null;
-
-    /**
-     * @var ?Attributes
-     */
-    private ?Collection $attributes = null;
+    public static function from(FunctionDeclaration $function, FunctionMetadata $functionMetadata): self
+    {
+        return new self(
+            id: $function->id,
+            templates: TemplateReflection::from($function->id, $functionMetadata->templates),
+            attributes: AttributeReflection::from($function->id, $function->attributes),
+            parameters: ParameterReflection::from($function->parameters, $functionMetadata->parameters),
+            snippet: $function->snippet,
+            phpDoc: $function->phpDoc,
+            source: $function->context->source,
+            namespace: $function->context->namespace(),
+            changeDetector: $function->context->source->changeDetector,
+            generator: $function->generator,
+            returnsReference: $function->returnsReference,
+            deprecation: $functionMetadata->deprecation ?? ($function->internallyDeprecated ? new Deprecation() : null),
+            returnType: new TypeReflection($function->returnType, $functionMetadata->returnType),
+            throwsType: $functionMetadata->throwsTypes === [] ? null : types::union(...$functionMetadata->throwsTypes),
+        );
+    }
 
     /**
-     * @var ?Parameters
+     * @var ?non-empty-string
      */
-    private ?Collection $parameters;
+    public readonly ?string $name;
 
     /**
-     * @internal
-     * @psalm-internal Typhoon\Reflection
+     * @param Templates $templates
+     * @param Attributes $attributes
+     * @param Parameters $parameters
      */
-    public function __construct(
-        NamedFunctionId|AnonymousFunctionId $id,
-        TypedMap $data,
-        private readonly TyphoonReflector $reflector,
+    private function __construct(
+        public readonly NamedFunctionId|AnonymousFunctionId $id,
+        private readonly Collection $templates,
+        private Collection $attributes,
+        private Collection $parameters,
+        private readonly ?SourceCodeSnippet $snippet,
+        private readonly ?SourceCodeSnippet $phpDoc,
+        private readonly Extension|SourceCode $source,
+        private readonly string $namespace,
+        private readonly ChangeDetector $changeDetector,
+        private readonly bool $generator,
+        private readonly bool $returnsReference,
+        private readonly ?Deprecation $deprecation,
+        private readonly TypeReflection $returnType,
+        private readonly ?Type $throwsType,
     ) {
-        $this->id = $id;
-        $this->data = $data;
+        $this->name = $id instanceof NamedFunctionId ? $id->name : null;
     }
 
     /**
@@ -70,8 +78,7 @@ final class FunctionReflection
      */
     public function templates(): Collection
     {
-        return $this->templates ??= (new Collection($this->data[Data::Templates]))
-            ->map(fn(TypedMap $data, string $name): TemplateReflection => new TemplateReflection(Id::template($this->id, $name), $data));
+        return $this->templates;
     }
 
     /**
@@ -81,8 +88,7 @@ final class FunctionReflection
      */
     public function attributes(): Collection
     {
-        return $this->attributes ??= (new Collection($this->data[Data::Attributes]))
-            ->map(fn(TypedMap $data, int $index): AttributeReflection => new AttributeReflection($this->id, $index, $data, $this->reflector));
+        return $this->attributes;
     }
 
     /**
@@ -92,16 +98,17 @@ final class FunctionReflection
      */
     public function parameters(): Collection
     {
-        return $this->parameters ??= (new Collection($this->data[Data::Parameters]))
-            ->map(fn(TypedMap $data, string $name): ParameterReflection => new ParameterReflection(Id::parameter($this->id, $name), $data, $this->reflector));
+        return $this->parameters;
     }
 
-    /**
-     * @return ?non-empty-string
-     */
-    public function phpDoc(): ?string
+    public function phpDoc(): ?SourceCodeSnippet
     {
-        return $this->data[Data::PhpDoc]?->getText();
+        return $this->phpDoc;
+    }
+
+    public function isInternallyDefined(): bool
+    {
+        return $this->source instanceof Extension;
     }
 
     /**
@@ -109,40 +116,32 @@ final class FunctionReflection
      */
     public function extension(): ?string
     {
-        return $this->data[Data::PhpExtension];
+        return $this->source instanceof Extension ? $this->source->name : null;
+    }
+
+    public function file(): ?File
+    {
+        return $this->source instanceof SourceCode ? $this->source->file : null;
     }
 
     public function namespace(): string
     {
-        return $this->data[Data::Namespace];
+        return $this->namespace;
     }
 
-    /**
-     * @return ?non-empty-string
-     */
-    public function file(): ?string
+    public function snippet(): ?SourceCodeSnippet
     {
-        return $this->data[Data::File];
-    }
-
-    public function location(): ?Location
-    {
-        return $this->data[Data::Location];
+        return $this->snippet;
     }
 
     public function changeDetector(): ChangeDetector
     {
-        return $this->data[Data::ChangeDetector];
-    }
-
-    public function isInternallyDefined(): bool
-    {
-        return $this->data[Data::InternallyDefined];
+        return $this->changeDetector;
     }
 
     public function isGenerator(): bool
     {
-        return $this->data[Data::Generator];
+        return $this->generator;
     }
 
     public function isAnonymous(): bool
@@ -152,7 +151,7 @@ final class FunctionReflection
 
     public function isStatic(): bool
     {
-        return $this->data[Data::Static];
+        return false;
     }
 
     public function isVariadic(): bool
@@ -162,33 +161,49 @@ final class FunctionReflection
 
     public function returnsReference(): bool
     {
-        return $this->data[Data::ReturnsReference];
+        return $this->returnsReference;
     }
 
     public function returnType(TypeKind $kind = TypeKind::Resolved): ?Type
     {
-        return $this->data[Data::Type]->get($kind);
+        return $this->returnType->byKind($kind);
     }
 
     public function throwsType(): ?Type
     {
-        return $this->data[Data::ThrowsType];
+        return $this->throwsType;
     }
 
     public function isDeprecated(): bool
     {
-        return $this->data[Data::Deprecation] !== null;
+        return $this->deprecation !== null;
     }
 
     public function deprecation(): ?Deprecation
     {
-        return $this->data[Data::Deprecation];
+        return $this->deprecation;
     }
-
-    private ?FunctionAdapter $native = null;
 
     public function toNativeReflection(): \ReflectionFunction
     {
-        return $this->native ??= new FunctionAdapter($this);
+        return new FunctionAdapter($this);
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __load(TyphoonReflector $reflector): self
+    {
+        $arguments = get_object_vars($this);
+        unset($arguments['name']);
+        $arguments['attributes'] = $this->attributes->map(
+            fn(AttributeReflection $attribute): AttributeReflection => $attribute->__load($reflector, $this->id),
+        );
+        $arguments['parameters'] = $this->parameters->map(
+            fn(ParameterReflection $parameter): ParameterReflection => $parameter->__load($reflector, $this->id),
+        );
+
+        return new self(...$arguments);
     }
 }

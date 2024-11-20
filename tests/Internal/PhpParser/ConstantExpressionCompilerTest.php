@@ -17,10 +17,13 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
-use Typhoon\Reflection\Internal\ConstantExpression\Expression;
-use Typhoon\Reflection\Internal\Context\ContextVisitor;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
+use Typhoon\Reflection\Declaration\ConstantExpression\RuntimeEvaluationContext;
+use Typhoon\Reflection\Declaration\Context;
+use Typhoon\Reflection\File;
+use Typhoon\Reflection\SourceCode;
 
-#[CoversClass(ConstantExpressionCompiler::class)]
+#[CoversClass(ConstantExpressionParser::class)]
 final class ConstantExpressionCompilerTest extends TestCase
 {
     private static ?Parser $parser = null;
@@ -97,7 +100,7 @@ final class ConstantExpressionCompilerTest extends TestCase
         $expected = self::eval("return {$code};");
         $compiled = $this->compile("<?php {$code};", static fn(Node $node): \Generator => $node instanceof StmtExpr ? yield $node->expr : null);
 
-        $evaluated = $compiled[0]->evaluate();
+        $evaluated = $compiled[0]->evaluate(new RuntimeEvaluationContext());
 
         self::assertEquals($expected, $evaluated);
     }
@@ -109,7 +112,7 @@ final class ConstantExpressionCompilerTest extends TestCase
             static fn(Node $node): \Generator => $node instanceof StmtExpr ? yield $node->expr : null,
         );
 
-        $evaluated = $compiled[0]->evaluate();
+        $evaluated = $compiled[0]->evaluate(new RuntimeEvaluationContext());
 
         self::assertEquals(\ArrayObject::ARRAY_AS_PROPS, $evaluated);
     }
@@ -136,7 +139,7 @@ final class ConstantExpressionCompilerTest extends TestCase
         );
 
         $evaluated = array_map(
-            static fn(Expression $expression): mixed => $expression->evaluate(),
+            static fn(ConstantExpression $expression): mixed => $expression->evaluate(new RuntimeEvaluationContext()),
             $compiled,
         );
 
@@ -178,7 +181,7 @@ final class ConstantExpressionCompilerTest extends TestCase
         );
 
         $evaluated = array_map(
-            static fn(Expression $expression): mixed => $expression->evaluate(),
+            static fn(ConstantExpression $expression): mixed => $expression->evaluate(new RuntimeEvaluationContext()),
             $compiled,
         );
 
@@ -211,7 +214,7 @@ final class ConstantExpressionCompilerTest extends TestCase
         );
 
         $evaluated = array_map(
-            static fn(Expression $expression): mixed => $expression->evaluate(),
+            static fn(ConstantExpression $expression): mixed => $expression->evaluate(new RuntimeEvaluationContext()),
             $compiled,
         );
 
@@ -258,7 +261,7 @@ final class ConstantExpressionCompilerTest extends TestCase
         );
 
         $evaluated = array_map(
-            static fn(Expression $expression): mixed => $expression->evaluate(),
+            static fn(ConstantExpression $expression): mixed => $expression->evaluate(new RuntimeEvaluationContext()),
             $compiled,
         );
 
@@ -289,7 +292,7 @@ final class ConstantExpressionCompilerTest extends TestCase
 
     /**
      * @param \Closure(Node): \Generator<array-key, Expr> $expressionFinder
-     * @return array<Expression>
+     * @return array<ConstantExpression>
      */
     private function compile(string $code, \Closure $expressionFinder): array
     {
@@ -297,7 +300,10 @@ final class ConstantExpressionCompilerTest extends TestCase
         $nodes = self::$parser->parse($code) ?? [];
 
         $nameResolver = new NameResolver();
-        $contextVisitor = new ContextVisitor($code, 'file.php', $nameResolver->getNameContext());
+        $contextVisitor = new ContextVisitor(
+            baseContext: Context::start(SourceCode::fromFile(File::fromContents($code))),
+            nameContext: $nameResolver->getNameContext(),
+        );
         $findAndCompile = new FindAndCompileVisitor($contextVisitor, $expressionFinder);
         $traverser = new NodeTraverser();
         $traverser->addVisitor($nameResolver);

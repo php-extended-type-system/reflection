@@ -1,6 +1,6 @@
 {
     "require-dev": {
-        "phpunit/phpunit": "^10.5.36",
+        "phpunit/phpunit": "^10.5.38",
         "psalm/plugin-phpunit": "^0.18.4",
         "vimeo/psalm": "^5.26.1",
         "typhoon/check-visibility-psalm-plugin": "^0.1.0"

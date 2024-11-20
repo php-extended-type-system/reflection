@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection\Internal\NativeAdapter;
 
-use Typhoon\DeclarationId\AnonymousClassId;
-use Typhoon\Reflection\Internal\Data;
 use Typhoon\Reflection\MethodReflection;
 use Typhoon\Reflection\ModifierKind;
 use Typhoon\Reflection\ParameterReflection;
@@ -42,7 +40,7 @@ final class MethodAdapter extends \ReflectionMethod
     public function __get(string $name)
     {
         return match ($name) {
-            'name' => $this->getName(),
+            'name' => $this->reflection->name,
             'class' => $this->getDeclaringClass()->name,
             default => new \LogicException(\sprintf('Undefined property %s::$%s', self::class, $name)),
         };
@@ -94,15 +92,9 @@ final class MethodAdapter extends \ReflectionMethod
 
     public function getDeclaringClass(): \ReflectionClass
     {
-        $declaringClassId = $this->reflection->data[Data::DeclaringClassId];
+        $declaringClass = $this->reflector->reflectClass($this->reflection->declarationId->class);
 
-        if ($declaringClassId instanceof AnonymousClassId) {
-            return $this->reflector->reflect($this->reflection->id->class)->toNativeReflection();
-        }
-
-        $declaringClass = $this->reflector->reflect($declaringClassId);
-
-        if ($declaringClass->isTrait()) {
+        if ($declaringClass->isAnonymous() || $declaringClass->isTrait()) {
             return $this->reflection->class()->toNativeReflection();
         }
 
@@ -111,12 +103,12 @@ final class MethodAdapter extends \ReflectionMethod
 
     public function getDocComment(): string|false
     {
-        return $this->reflection->phpDoc() ?? false;
+        return $this->reflection->phpDoc()?->toString() ?? false;
     }
 
     public function getEndLine(): int|false
     {
-        return $this->reflection->location()?->endLine ?? false;
+        return $this->reflection->snippet()?->endLine() ?? false;
     }
 
     public function getExtension(): ?\ReflectionExtension
@@ -131,7 +123,7 @@ final class MethodAdapter extends \ReflectionMethod
 
     public function getFileName(): string|false
     {
-        return $this->reflection->file() ?? false;
+        return $this->reflection->file()?->path ?? false;
     }
 
     public function getModifiers(): int
@@ -202,7 +194,7 @@ final class MethodAdapter extends \ReflectionMethod
 
     public function getStartLine(): int|false
     {
-        return $this->reflection->location()?->startLine ?? false;
+        return $this->reflection->snippet()?->startLine() ?? false;
     }
 
     public function getStaticVariables(): array

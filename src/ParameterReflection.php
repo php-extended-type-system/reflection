@@ -4,50 +4,92 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection;
 
+use Typhoon\DeclarationId\AnonymousFunctionId;
+use Typhoon\DeclarationId\Id;
 use Typhoon\DeclarationId\MethodId;
+use Typhoon\DeclarationId\NamedFunctionId;
 use Typhoon\DeclarationId\ParameterId;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Data\PassedBy;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpressionContext;
+use Typhoon\Reflection\Declaration\ConstantExpression\ReflectorEvaluationContext;
+use Typhoon\Reflection\Declaration\Context;
+use Typhoon\Reflection\Declaration\ParameterDeclaration;
+use Typhoon\Reflection\Declaration\PassedBy;
 use Typhoon\Reflection\Internal\NativeAdapter\ParameterAdapter;
+use Typhoon\Reflection\Internal\Reflection\TypeReflection;
+use Typhoon\Reflection\Metadata\ParameterMetadata;
 use Typhoon\Type\Type;
-use Typhoon\TypedMap\TypedMap;
 
 /**
  * @api
- * @psalm-import-type Attributes from ReflectionCollections
+ * @psalm-import-type Parameters from TyphoonReflector
+ * @psalm-import-type Attributes from TyphoonReflector
  */
 final class ParameterReflection
 {
-    use NonSerializable;
-
-    public readonly ParameterId $id;
-
-    /**
-     * This internal property is public for testing purposes.
-     * It will likely be available as part of the API in the near future.
-     *
-     * @internal
-     * @psalm-internal Typhoon
-     */
-    public readonly TypedMap $data;
-
-    /**
-     * @var ?Attributes
-     */
-    private ?Collection $attributes = null;
-
     /**
      * @internal
      * @psalm-internal Typhoon\Reflection
+     * @param list<ParameterDeclaration> $declarations
+     * @param array<non-empty-string, ParameterMetadata> $metadatas
+     * @return Parameters
      */
-    public function __construct(
-        ParameterId $id,
-        TypedMap $data,
-        private readonly TyphoonReflector $reflector,
+    public static function from(array $declarations, array $metadatas): Collection
+    {
+        $reflections = [];
+
+        foreach ($declarations as $index => $declaration) {
+            $id = Id::parameter($declaration->context->id, $declaration->name);
+            $metadata = $metadatas[$declaration->name] ?? null;
+
+            $reflections[$declaration->name] = new self(
+                id: $id,
+                declarationId: $id,
+                type: new TypeReflection($declaration->type, $metadata?->type),
+                default: $declaration->default,
+                variadic: $declaration->variadic,
+                passedBy: $declaration->passedBy,
+                promoted: $declaration->isPromoted(),
+                attributes: AttributeReflection::from($id, $declaration->attributes),
+                phpDoc: $declaration->phpDoc,
+                internallyOptional: $declaration->internallyOptional,
+                index: $index,
+                annotated: false,
+                deprecation: $metadata?->deprecation,
+                snippet: $declaration->snippet,
+            );
+        }
+
+        return new Collection($reflections);
+    }
+
+    /**
+     * @var non-empty-string
+     */
+    public readonly string $name;
+
+    /**
+     * @param Attributes $attributes
+     * @param non-negative-int $index
+     */
+    private function __construct(
+        public readonly ParameterId $id,
+        public readonly ParameterId $declarationId,
+        public readonly TypeReflection $type,
+        private readonly ?ConstantExpression $default,
+        private readonly bool $variadic,
+        private readonly PassedBy $passedBy,
+        private readonly bool $promoted,
+        private readonly Collection $attributes,
+        private readonly ?SourceCodeSnippet $phpDoc,
+        private readonly bool $internallyOptional,
+        private readonly int $index,
+        private readonly bool $annotated,
+        private readonly ?Deprecation $deprecation,
+        private readonly ?SourceCodeSnippet $snippet,
+        private readonly ?TyphoonReflector $reflector = null,
     ) {
-        $this->id = $id;
-        $this->data = $data;
+        $this->name = $id->name;
     }
 
     /**
@@ -55,12 +97,12 @@ final class ParameterReflection
      */
     public function index(): int
     {
-        return $this->data[Data::Index];
+        return $this->index;
     }
 
-    public function location(): ?Location
+    public function snippet(): ?SourceCodeSnippet
     {
-        return $this->data[Data::Location];
+        return $this->snippet;
     }
 
     /**
@@ -70,27 +112,34 @@ final class ParameterReflection
      */
     public function attributes(): Collection
     {
-        return $this->attributes ??= (new Collection($this->data[Data::Attributes]))
-            ->map(fn(TypedMap $data, int $index): AttributeReflection => new AttributeReflection($this->id, $index, $data, $this->reflector));
+        return $this->attributes;
+    }
+
+    public function phpDoc(): ?SourceCodeSnippet
+    {
+        return $this->phpDoc;
     }
 
     /**
-     * @return ?non-empty-string
+     * @todo refactor to reflector->reflect($id)
      */
-    public function phpDoc(): ?string
-    {
-        return $this->data[Data::PhpDoc]?->getText();
-    }
-
     public function function(): FunctionReflection|MethodReflection
     {
-        return $this->reflector->reflect($this->id->function);
+        $functionId = $this->id->function;
+
+        if ($functionId instanceof MethodId) {
+            return $this->reflector()->reflectClass($functionId->class)->methods()[$functionId->name];
+        }
+
+        \assert($functionId instanceof NamedFunctionId);
+
+        return $this->reflector()->reflectFunction($functionId);
     }
 
     public function class(): ?ClassReflection
     {
         if ($this->id->function instanceof MethodId) {
-            return $this->reflector->reflect($this->id->function->class);
+            return $this->reflector()->reflectClass($this->id->function->class);
         }
 
         return null;
@@ -98,7 +147,7 @@ final class ParameterReflection
 
     public function hasDefaultValue(): bool
     {
-        return $this->data[Data::DefaultValueExpression] !== null;
+        return $this->default !== null;
     }
 
     /**
@@ -106,42 +155,34 @@ final class ParameterReflection
      */
     public function evaluateDefault(): mixed
     {
-        return $this->data[Data::DefaultValueExpression]?->evaluate($this->reflector);
-    }
-
-    /**
-     * @deprecated since 0.4.2 in favor of evaluateDefault() instead
-     */
-    public function defaultValue(): mixed
-    {
-        trigger_deprecation('typhoon/reflection', '0.4.2', 'Calling %s is deprecated in favor of %s::evaluateDefault()', __METHOD__, self::class);
-
-        return $this->evaluateDefault();
+        return $this->default?->evaluate(new ReflectorEvaluationContext($this->reflector()));
     }
 
     public function isNative(): bool
     {
-        return !$this->isAnnotated();
+        return !$this->annotated;
     }
 
     public function isAnnotated(): bool
     {
-        return $this->data[Data::Annotated];
+        return $this->annotated;
     }
 
     public function isOptional(): bool
     {
-        return $this->data[Data::Optional];
+        return $this->internallyOptional
+            || $this->variadic
+            || $this->default !== null;
     }
 
     public function canBePassedByValue(): bool
     {
-        return \in_array($this->data[Data::PassedBy], [PassedBy::Value, PassedBy::ValueOrReference], true);
+        return $this->passedBy === PassedBy::Value || $this->passedBy === PassedBy::ValueOrReference;
     }
 
     public function canBePassedByReference(): bool
     {
-        return \in_array($this->data[Data::PassedBy], [PassedBy::Reference, PassedBy::ValueOrReference], true);
+        return $this->passedBy === PassedBy::Reference || $this->passedBy === PassedBy::ValueOrReference;
     }
 
     /**
@@ -149,12 +190,12 @@ final class ParameterReflection
      */
     public function isPromoted(): bool
     {
-        return $this->data[Data::Promoted];
+        return $this->promoted;
     }
 
     public function isVariadic(): bool
     {
-        return $this->data[Data::Variadic];
+        return $this->variadic;
     }
 
     /**
@@ -162,23 +203,108 @@ final class ParameterReflection
      */
     public function type(TypeKind $kind = TypeKind::Resolved): ?Type
     {
-        return $this->data[Data::Type]->get($kind);
+        return $this->type->byKind($kind);
     }
 
     public function isDeprecated(): bool
     {
-        return $this->data[Data::Deprecation] !== null;
+        return $this->deprecation !== null;
     }
 
     public function deprecation(): ?Deprecation
     {
-        return $this->data[Data::Deprecation];
+        return $this->deprecation;
     }
-
-    private ?ParameterAdapter $native = null;
 
     public function toNativeReflection(): \ReflectionParameter
     {
-        return $this->native ??= new ParameterAdapter($this, $this->reflector);
+        return new ParameterAdapter($this, $this->reflector(), $this->default);
+    }
+
+    private function reflector(): TyphoonReflector
+    {
+        return $this->reflector ?? throw new \LogicException('No reflector');
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __inherit(MethodId $methodId, TypeReflection $type): self
+    {
+        $id = Id::parameter($methodId, $this->name);
+
+        return new self(
+            id: $id,
+            declarationId: $this->declarationId,
+            type: $type,
+            default: $this->default,
+            variadic: $this->variadic,
+            passedBy: $this->passedBy,
+            promoted: $this->promoted,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__withTargetId($id)),
+            phpDoc: $this->phpDoc,
+            internallyOptional: $this->internallyOptional,
+            index: $this->index,
+            annotated: $this->annotated,
+            deprecation: $this->deprecation,
+            snippet: $this->snippet,
+        );
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     * @param Context<MethodId> $newMethodContext
+     */
+    public function __use(Context $newMethodContext, TypeReflection $type): self
+    {
+        $id = Id::parameter($newMethodContext->id, $this->name);
+
+        return new self(
+            id: $id,
+            declarationId: $this->declarationId,
+            type: $type,
+            default: $this->default?->rebuild(new ConstantExpressionContext($newMethodContext)),
+            variadic: $this->variadic,
+            passedBy: $this->passedBy,
+            promoted: $this->promoted,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__withTargetId($id)),
+            phpDoc: $this->phpDoc,
+            internallyOptional: $this->internallyOptional,
+            index: $this->index,
+            annotated: $this->annotated,
+            deprecation: $this->deprecation,
+            snippet: $this->snippet,
+        );
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __load(TyphoonReflector $reflector, NamedFunctionId|AnonymousFunctionId|MethodId $functionId): self
+    {
+        \assert($this->reflector === null);
+
+        $id = Id::parameter($functionId, $this->name);
+
+        return new self(
+            id: $id,
+            declarationId: $this->declarationId,
+            type: $this->type,
+            default: $this->default,
+            variadic: $this->variadic,
+            passedBy: $this->passedBy,
+            promoted: $this->promoted,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__load($reflector, $id)),
+            phpDoc: $this->phpDoc,
+            internallyOptional: $this->internallyOptional,
+            index: $this->index,
+            annotated: $this->annotated,
+            deprecation: $this->deprecation,
+            snippet: $this->snippet,
+            reflector: $reflector,
+        );
     }
 }

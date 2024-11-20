@@ -199,6 +199,25 @@ namespace Properties
         ) {
         }
     }
+
+    class ClassWithAPromotedProperty
+    {
+        public function __construct(
+            public readonly string $promoted,
+        ) {}
+    }
+
+    class ClassRedefiningInheritedPromotedPropertyAsPromoted extends ClassWithAPromotedProperty
+    {
+        public function __construct(
+            public readonly string $promoted
+        ) {}
+    }
+
+    class ClassRedefiningInheritedPromotedPropertyAsNonPromoted extends ClassWithAPromotedProperty
+    {
+        public readonly string $promoted;
+    }
 }
 
 namespace Methods
@@ -573,17 +592,34 @@ namespace Stringables
 {
     interface AnotherInterface {}
 
+    trait TraitWithToString
+    {
+        public function __toString(): string { return ''; }
+    }
+
+    class ClassWithTraitWithToString
+    {
+        use TraitWithToString;
+    }
+
     class ImplicitlyStringableClass implements AnotherInterface
     {
         public function __toString(): string { return 'string'; }
     }
+
+    class ClassExtendingImplicitlyStringableClass extends ImplicitlyStringableClass {}
 
     interface ImplicitlyStringableInterface extends AnotherInterface
     {
         public function __toString(): string;
     }
 
-    abstract class ExplicitlyStringableClass implements \Stringable {}
+    abstract class ExplicitlyStringableAbstractClass implements \Stringable {}
+
+    class ExplicitlyStringableClass implements \Stringable
+    {
+        public function __toString(): string { return ''; }
+    }
 }
 
 namespace ParameterInheritedFromTraitAndClass

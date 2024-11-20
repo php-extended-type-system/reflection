@@ -14,14 +14,14 @@ use Typhoon\DeclarationId\ParameterId;
 use Typhoon\DeclarationId\PropertyId;
 use Typhoon\Reflection\AttributeReflection;
 use Typhoon\Reflection\Collection;
-use Typhoon\Reflection\ReflectionCollections;
+use Typhoon\Reflection\TyphoonReflector;
 
 /**
  * @internal
  * @psalm-internal Typhoon\Reflection
  * @template TAttribute of object
  * @extends \ReflectionAttribute<TAttribute>
- * @psalm-import-type Attributes from ReflectionCollections
+ * @psalm-import-type Attributes from TyphoonReflector
  */
 final class AttributeAdapter extends \ReflectionAttribute
 {

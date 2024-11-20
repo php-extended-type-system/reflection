@@ -29,6 +29,8 @@ $config = (new Config())
     'strict_comparison' => false,
     'logical_operators' => false,
     'no_multiline_whitespace_around_double_arrow' => false,
+    // TODO issue: Resource class is fixed to resource
+    'phpdoc_types' => false,
     'class_attributes_separation' => ['elements' => [
         'trait_import' => 'only_if_meta',
         'const' => 'only_if_meta',

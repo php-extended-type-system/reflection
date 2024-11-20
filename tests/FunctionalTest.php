@@ -10,17 +10,17 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Finder\Finder;
 
 #[CoversClass(TyphoonReflector::class)]
-#[CoversClass(AliasReflection::class)]
+// #[CoversClass(AliasReflection::class)]
 #[CoversClass(AttributeReflection::class)]
 #[CoversClass(ClassConstantReflection::class)]
 #[CoversClass(ClassReflection::class)]
 #[CoversClass(ConstantReflection::class)]
 #[CoversClass(FunctionReflection::class)]
-#[CoversClass(MethodReflection::class)]
+// #[CoversClass(MethodReflection::class)]
 #[CoversClass(ParameterReflection::class)]
 #[CoversClass(PropertyReflection::class)]
 #[CoversClass(TemplateReflection::class)]
-#[CoversClass(Location::class)]
+// #[CoversClass(Location::class)]
 final class FunctionalTest extends TestCase
 {
     private static ?TyphoonReflector $reflector = null;

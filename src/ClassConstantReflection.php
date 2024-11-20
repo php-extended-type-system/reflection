@@ -4,50 +4,55 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection;
 
+use Typhoon\DeclarationId\AnonymousClassId;
 use Typhoon\DeclarationId\ClassConstantId;
+use Typhoon\DeclarationId\Id;
 use Typhoon\DeclarationId\NamedClassId;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Data\Visibility;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
+use Typhoon\Reflection\Declaration\ClassConstantDeclaration;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpressionContext;
+use Typhoon\Reflection\Declaration\ConstantExpression\ReflectorEvaluationContext;
+use Typhoon\Reflection\Declaration\Context;
+use Typhoon\Reflection\Declaration\EnumCaseDeclaration;
+use Typhoon\Reflection\Declaration\Visibility;
 use Typhoon\Reflection\Internal\NativeAdapter\ClassConstantAdapter;
+use Typhoon\Reflection\Internal\NativeAdapter\EnumBackedCaseAdapter;
+use Typhoon\Reflection\Internal\NativeAdapter\EnumUnitCaseAdapter;
+use Typhoon\Reflection\Internal\Reflection\ModifierReflection;
+use Typhoon\Reflection\Internal\Reflection\TypeReflection;
+use Typhoon\Reflection\Metadata\ClassConstantMetadata;
 use Typhoon\Type\Type;
-use Typhoon\TypedMap\TypedMap;
 
 /**
  * @api
- * @psalm-import-type Attributes from ReflectionCollections
+ * @psalm-import-type Attributes from TyphoonReflector
+ * @psalm-import-type ClassConstants from TyphoonReflector
  */
 final class ClassConstantReflection
 {
-    use NonSerializable;
-
-    public readonly ClassConstantId $id;
+    /**
+     * @var non-empty-string
+     */
+    public readonly string $name;
 
     /**
-     * This internal property is public for testing purposes.
-     * It will likely be available as part of the API in the near future.
-     *
-     * @internal
-     * @psalm-internal Typhoon
+     * @param Attributes $attributes
      */
-    public readonly TypedMap $data;
-
-    /**
-     * @var ?Attributes
-     */
-    private ?Collection $attributes = null;
-
-    /**
-     * @internal
-     * @psalm-internal Typhoon\Reflection
-     */
-    public function __construct(
-        ClassConstantId $id,
-        TypedMap $data,
-        private readonly TyphoonReflector $reflector,
+    private function __construct(
+        public readonly ClassConstantId $id,
+        public readonly ClassConstantId $declarationId,
+        private readonly ModifierReflection $final,
+        private readonly ?Visibility $visibility,
+        public readonly TypeReflection $type,
+        private readonly ?ConstantExpression $value,
+        private readonly null|int|string $backingValue,
+        private readonly Collection $attributes,
+        private readonly ?SourceCodeSnippet $snippet,
+        private readonly ?SourceCodeSnippet $phpDoc,
+        private readonly ?Deprecation $deprecation,
+        private readonly ?TyphoonReflector $reflector = null,
     ) {
-        $this->id = $id;
-        $this->data = $data;
+        $this->name = $id->name;
     }
 
     /**
@@ -57,31 +62,27 @@ final class ClassConstantReflection
      */
     public function attributes(): Collection
     {
-        return $this->attributes ??= (new Collection($this->data[Data::Attributes]))
-            ->map(fn(TypedMap $data, int $index): AttributeReflection => new AttributeReflection($this->id, $index, $data, $this->reflector));
+        return $this->attributes;
     }
 
-    public function location(): ?Location
+    public function snippet(): ?SourceCodeSnippet
     {
-        return $this->data[Data::Location];
+        return $this->snippet;
     }
 
-    public function isInternallyDefined(): bool
+    /*public function isInternallyDefined(): bool
     {
-        return $this->data[Data::InternallyDefined] || $this->declaringClass()->isInternallyDefined();
-    }
+        return $this->extension !== null;
+    }*/
 
-    /**
-     * @return ?non-empty-string
-     */
-    public function phpDoc(): ?string
+    public function phpDoc(): ?SourceCodeSnippet
     {
-        return $this->data[Data::PhpDoc]?->getText();
+        return $this->phpDoc;
     }
 
     public function class(): ClassReflection
     {
-        return $this->reflector->reflect($this->id->class);
+        return $this->reflector()->reflectClass($this->id->class);
     }
 
     /**
@@ -91,73 +92,48 @@ final class ClassConstantReflection
      */
     public function evaluate(): mixed
     {
-        if ($this->isEnumCase()) {
+        if ($this->value === null) {
             \assert($this->id->class instanceof NamedClassId, 'Enum cannot be an anonymous class');
 
             return \constant($this->id->class->name . '::' . $this->id->name);
         }
 
-        return $this->data[Data::ValueExpression]->evaluate($this->reflector);
-    }
-
-    /**
-     * @deprecated since 0.4.2 in favor of evaluate()
-     */
-    public function value(): mixed
-    {
-        trigger_deprecation('typhoon/reflection', '0.4.2', 'Calling %s is deprecated in favor of %s::evaluate()', __METHOD__, self::class);
-
-        return $this->evaluate();
+        return $this->value->evaluate(new ReflectorEvaluationContext($this->reflector()));
     }
 
     public function isPrivate(): bool
     {
-        return $this->data[Data::Visibility] === Visibility::Private;
+        return $this->visibility === Visibility::Private;
     }
 
     public function isProtected(): bool
     {
-        return $this->data[Data::Visibility] === Visibility::Protected;
+        return $this->visibility === Visibility::Protected;
     }
 
     public function isPublic(): bool
     {
-        $visibility = $this->data[Data::Visibility];
-
-        return $visibility === null || $visibility === Visibility::Public;
+        return $this->visibility === null || $this->visibility === Visibility::Public;
     }
 
     public function isFinal(ModifierKind $kind = ModifierKind::Resolved): bool
     {
-        return match ($kind) {
-            ModifierKind::Resolved => $this->data[Data::NativeFinal] || $this->data[Data::AnnotatedFinal],
-            ModifierKind::Native => $this->data[Data::NativeFinal],
-            ModifierKind::Annotated => $this->data[Data::AnnotatedFinal],
-        };
+        return $this->final->byKind($kind);
     }
 
     public function isEnumCase(): bool
     {
-        return $this->data[Data::EnumCase];
+        return $this->value === null;
     }
 
     public function isBackedEnumCase(): bool
     {
-        return isset($this->data[Data::BackingValueExpression]);
+        return $this->backingValue !== null;
     }
 
     public function enumBackingValue(): null|int|string
     {
-        $expression = $this->data[Data::BackingValueExpression];
-
-        if ($expression === null) {
-            return null;
-        }
-
-        $value = $expression->evaluate($this->reflector);
-        \assert(\is_int($value) || \is_string($value), 'Enum backing value must be int|string');
-
-        return $value;
+        return $this->backingValue;
     }
 
     /**
@@ -165,28 +141,150 @@ final class ClassConstantReflection
      */
     public function type(TypeKind $kind = TypeKind::Resolved): ?Type
     {
-        return $this->data[Data::Type]->get($kind);
+        return $this->type->byKind($kind);
     }
 
     public function isDeprecated(): bool
     {
-        return $this->data[Data::Deprecation] !== null;
+        return $this->deprecation !== null;
     }
 
     public function deprecation(): ?Deprecation
     {
-        return $this->data[Data::Deprecation];
+        return $this->deprecation;
     }
-
-    private ?\ReflectionClassConstant $native = null;
 
     public function toNativeReflection(): \ReflectionClassConstant
     {
-        return $this->native ??= ClassConstantAdapter::create($this, $this->reflector);
+        $adapter = new ClassConstantAdapter($this, $this->reflector());
+
+        if ($this->isBackedEnumCase()) {
+            return new EnumBackedCaseAdapter($adapter, $this->backingValue);
+        }
+
+        if ($this->isEnumCase()) {
+            return new EnumUnitCaseAdapter($adapter);
+        }
+
+        return $adapter;
     }
 
-    private function declaringClass(): ClassReflection
+    private function reflector(): TyphoonReflector
     {
-        return $this->reflector->reflect($this->data[Data::DeclaringClassId]);
+        \assert($this->reflector !== null);
+
+        return $this->reflector;
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public static function __declare(
+        ClassConstantDeclaration|EnumCaseDeclaration $declaration,
+        ClassConstantMetadata $metadata = new ClassConstantMetadata(),
+    ): self {
+        $id = Id::classConstant($declaration->context->id, $declaration->name);
+
+        if ($declaration instanceof EnumCaseDeclaration) {
+            return new self(
+                id: $id,
+                declarationId: $id,
+                final: new ModifierReflection(),
+                visibility: Visibility::Public,
+                type: new TypeReflection(),
+                value: null,
+                backingValue: $declaration->backingValue,
+                attributes: AttributeReflection::from($id, $declaration->attributes),
+                snippet: $declaration->snippet,
+                phpDoc: $declaration->phpDoc,
+                deprecation: $metadata->deprecation,
+            );
+        }
+
+        return new self(
+            id: $id,
+            declarationId: $id,
+            final: new ModifierReflection($declaration->final, $metadata->final),
+            visibility: $declaration->visibility,
+            type: new TypeReflection($declaration->type, $metadata->type),
+            value: $declaration->value,
+            backingValue: null,
+            attributes: AttributeReflection::from($id, $declaration->attributes),
+            snippet: $declaration->snippet,
+            phpDoc: $declaration->phpDoc,
+            deprecation: $metadata->deprecation,
+        );
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __inherit(NamedClassId|AnonymousClassId $classId, TypeReflection $type): self
+    {
+        $id = Id::classConstant($classId, $this->name);
+
+        return new self(
+            id: $id,
+            declarationId: $this->declarationId,
+            final: $this->final,
+            visibility: $this->visibility,
+            type: $type,
+            value: $this->value,
+            backingValue: $this->backingValue,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__withTargetId($id)),
+            snippet: $this->snippet,
+            phpDoc: $this->phpDoc,
+            deprecation: $this->deprecation,
+        );
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     * @param Context<NamedClassId|AnonymousClassId> $newClassContext
+     */
+    public function __use(Context $newClassContext, TypeReflection $type): self
+    {
+        $id = Id::classConstant($newClassContext->id, $this->name);
+
+        return new self(
+            id: $id,
+            declarationId: $this->declarationId,
+            final: $this->final,
+            visibility: $this->visibility,
+            type: $type,
+            value: $this->value?->rebuild(new ConstantExpressionContext($newClassContext)),
+            backingValue: $this->backingValue,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__withTargetId($id)),
+            snippet: $this->snippet,
+            phpDoc: $this->phpDoc,
+            deprecation: $this->deprecation,
+        );
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __load(TyphoonReflector $reflector, NamedClassId|AnonymousClassId $classId): self
+    {
+        \assert($this->reflector === null);
+
+        return new self(
+            id: $id = Id::classConstant($classId, $this->name),
+            declarationId: $this->declarationId,
+            final: $this->final,
+            visibility: $this->visibility,
+            type: $this->type,
+            value: $this->value,
+            backingValue: $this->backingValue,
+            attributes: $this->attributes->map(static fn(AttributeReflection $attribute): AttributeReflection => $attribute->__load($reflector, $id)),
+            snippet: $this->snippet,
+            phpDoc: $this->phpDoc,
+            deprecation: $this->deprecation,
+            reflector: $reflector,
+        );
     }
 }

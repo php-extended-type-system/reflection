@@ -28,7 +28,7 @@ final class Collection implements \ArrayAccess, \IteratorAggregate, \Countable
      * @param array<TKey, TValue> $values
      */
     public function __construct(
-        private readonly array $values,
+        private readonly array $values = [],
     ) {}
 
     public function offsetExists(mixed $offset): bool

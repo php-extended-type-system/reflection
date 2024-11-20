@@ -12,40 +12,52 @@ use Typhoon\DeclarationId\NamedClassId;
 use Typhoon\DeclarationId\NamedFunctionId;
 use Typhoon\DeclarationId\ParameterId;
 use Typhoon\DeclarationId\PropertyId;
-use Typhoon\Reflection\Internal\Data;
-use Typhoon\Reflection\Internal\Misc\NonSerializable;
+use Typhoon\Reflection\Declaration\AttributeDeclaration;
+use Typhoon\Reflection\Declaration\ConstantExpression\ConstantExpression;
+use Typhoon\Reflection\Declaration\ConstantExpression\ReflectorEvaluationContext;
 use Typhoon\Reflection\Internal\NativeAdapter\AttributeAdapter;
-use Typhoon\TypedMap\TypedMap;
 
 /**
  * @api
+ * @psalm-import-type Attributes from TyphoonReflector
  */
 final class AttributeReflection
 {
-    use NonSerializable;
-
     /**
-     * This internal property is public for testing purposes.
-     * It will likely be available as part of the API in the near future.
-     *
-     * @internal
-     * @psalm-internal Typhoon
+     * @param list<AttributeDeclaration> $attributes
+     * @return Attributes
      */
-    public readonly TypedMap $data;
+    public static function from(
+        NamedFunctionId|AnonymousFunctionId|ParameterId|NamedClassId|AnonymousClassId|ClassConstantId|MethodId|PropertyId $targetId,
+        array $attributes,
+    ): Collection {
+        $repeated = array_count_values(array_column($attributes, 'class'));
+
+        return (new Collection($attributes))
+            ->map(static fn(AttributeDeclaration $attribute, int $index): self => new self(
+                targetId: $targetId,
+                index: $index,
+                repeated: $repeated[$attribute->class] > 1,
+                class: $attribute->class,
+                arguments: $attribute->arguments,
+                snippet: $attribute->snippet,
+            ));
+    }
 
     /**
-     * @internal
-     * @psalm-internal Typhoon\Reflection
      * @param non-negative-int $index
+     * @param non-empty-string $class
+     * @param ConstantExpression<array> $arguments
      */
-    public function __construct(
+    private function __construct(
         private readonly NamedFunctionId|AnonymousFunctionId|ParameterId|NamedClassId|AnonymousClassId|ClassConstantId|MethodId|PropertyId $targetId,
         private readonly int $index,
-        TypedMap $data,
-        private readonly TyphoonReflector $reflector,
-    ) {
-        $this->data = $data;
-    }
+        private readonly bool $repeated,
+        private readonly string $class,
+        private readonly ConstantExpression $arguments,
+        private readonly ?SourceCodeSnippet $snippet,
+        private readonly ?TyphoonReflector $reflector = null,
+    ) {}
 
     /**
      * @return non-negative-int
@@ -62,7 +74,7 @@ final class AttributeReflection
      */
     public function className(): string
     {
-        return $this->data[Data::AttributeClassName];
+        return $this->class;
     }
 
     /**
@@ -73,7 +85,7 @@ final class AttributeReflection
     public function class(): ClassReflection
     {
         /** @var ClassReflection<object, NamedClassId<class-string>> */
-        return $this->reflector->reflectClass($this->className());
+        return $this->reflector()->reflectClass($this->className());
     }
 
     public function targetId(): NamedFunctionId|AnonymousFunctionId|ParameterId|NamedClassId|AnonymousClassId|ClassConstantId|MethodId|PropertyId
@@ -81,19 +93,19 @@ final class AttributeReflection
         return $this->targetId;
     }
 
-    public function target(): FunctionReflection|ClassReflection|ClassConstantReflection|PropertyReflection|MethodReflection|ParameterReflection|AliasReflection|TemplateReflection
-    {
-        return $this->reflector->reflect($this->targetId);
-    }
+    // public function target(): FunctionReflection|ClassReflection|ClassConstantReflection|PropertyReflection|MethodReflection|ParameterReflection|AliasReflection|TemplateReflection
+    // {
+    //     return $this->reflector->reflect($this->targetId);
+    // }
 
-    public function location(): ?Location
+    public function snippet(): ?SourceCodeSnippet
     {
-        return $this->data[Data::Location];
+        return $this->snippet;
     }
 
     public function isRepeated(): bool
     {
-        return $this->data[Data::AttributeRepeated];
+        return $this->repeated;
     }
 
     /**
@@ -101,17 +113,7 @@ final class AttributeReflection
      */
     public function evaluateArguments(): array
     {
-        return $this->data[Data::ArgumentsExpression]->evaluate($this->reflector);
-    }
-
-    /**
-     * @deprecated since 0.4.2 in favor of evaluateArguments()
-     */
-    public function arguments(): array
-    {
-        trigger_deprecation('typhoon/reflection', '0.4.2', 'Calling %s is deprecated in favor of %s::evaluateArguments()', __METHOD__, self::class);
-
-        return $this->evaluateArguments();
+        return $this->arguments->evaluate(new ReflectorEvaluationContext($this->reflector()));
     }
 
     /**
@@ -123,20 +125,41 @@ final class AttributeReflection
         return new ($this->className())(...$this->evaluateArguments());
     }
 
-    /**
-     * @deprecated since 0.4.2 in favor of evaluate()
-     */
-    public function newInstance(): object
-    {
-        trigger_deprecation('typhoon/reflection', '0.4.2', 'Calling %s is deprecated in favor of %s::evaluate()', __METHOD__, self::class);
-
-        return $this->evaluate();
-    }
-
-    private ?AttributeAdapter $native = null;
-
     public function toNativeReflection(): \ReflectionAttribute
     {
-        return $this->native ??= new AttributeAdapter($this);
+        return new AttributeAdapter($this);
+    }
+
+    private function reflector(): TyphoonReflector
+    {
+        \assert($this->reflector !== null);
+
+        return $this->reflector;
+    }
+
+    public function __withTargetId(
+        NamedFunctionId|AnonymousFunctionId|ParameterId|NamedClassId|AnonymousClassId|ClassConstantId|MethodId|PropertyId $targetId,
+    ): self {
+        $arguments = get_object_vars($this);
+        $arguments['targetId'] = $targetId;
+
+        return new self(...$arguments);
+    }
+
+    /**
+     * @internal
+     * @psalm-internal Typhoon\Reflection
+     */
+    public function __load(
+        TyphoonReflector $reflector,
+        NamedFunctionId|AnonymousFunctionId|ParameterId|NamedClassId|AnonymousClassId|ClassConstantId|MethodId|PropertyId $targetId,
+    ): self {
+        \assert($this->reflector === null);
+
+        $arguments = get_object_vars($this);
+        $arguments['targetId'] = $targetId;
+        $arguments['reflector'] = $reflector;
+
+        return new self(...$arguments);
     }
 }

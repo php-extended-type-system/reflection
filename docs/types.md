@@ -35,14 +35,12 @@ $constant = $class->constants()['CONSTANT'];
 
 var_dump(stringify($constant->type())); // "1"
 var_dump($constant->type(TypeKind::Annotated)); // null
-var_dump(stringify($constant->type(TypeKind::Inferred))); // "1"
 var_dump(stringify($constant->type(TypeKind::Native))); // "int"
 
 $property = $class->properties()['property'];
 
 var_dump(stringify($property->type())); // "non-empty-string"
 var_dump(stringify($property->type(TypeKind::Annotated))); // "non-empty-string"
-var_dump($property->type(TypeKind::Inferred)); // null
 var_dump(stringify($property->type(TypeKind::Native))); // "string"
 
 $getIterator = $reflector

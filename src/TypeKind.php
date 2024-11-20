@@ -11,7 +11,6 @@ enum TypeKind
 {
     case Native;
     case Tentative;
-    case Inferred;
     case Annotated;
     case Resolved;
 }

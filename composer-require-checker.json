@@ -1,8 +1,10 @@
 {
     "symbol-whitelist" : [
+        "class_like_exists",
+        "get_constant_extension",
         "Composer\\Autoload\\ClassLoader",
         "PhpParser\\Node\\Scalar\\DNumber",
         "PhpParser\\Node\\Scalar\\LNumber",
-        "Typhoon\\PhpStormReflectionStubs\\PhpStormStubsLocator"
+        "JetBrains\\PHPStormStub\\PhpStormStubsMap"
     ]
 }

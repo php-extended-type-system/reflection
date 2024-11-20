@@ -18,25 +18,23 @@
         "ext-tokenizer": "*",
         "nikic/php-parser": "^4.18 || ^5.0",
         "phpstan/phpdoc-parser": "^1.21",
-        "psr/simple-cache": "^3.0",
-        "symfony/deprecation-contracts": "^3.0",
-        "typhoon/change-detector": "^0.4.4",
+        "typhoon/change-detector": "^0.4.5",
         "typhoon/declaration-id": "^0.4",
-        "typhoon/type": "^0.4.4",
-        "typhoon/typed-map": "^0.4"
+        "typhoon/type": "^0.4.4"
     },
     "require-dev": {
         "bamarni/composer-bin-plugin": "^1.8.2",
         "dragon-code/benchmark": "^2.6",
         "ergebnis/composer-normalize": "^2.44.0",
         "friendsofphp/php-cs-fixer": "^3.64.0",
-        "php-defer/php-defer": "^5.0",
-        "phpstan/phpstan": "^1.12.6",
-        "phpunit/phpunit": "^10.5.36",
+        "jetbrains/phpstorm-stubs": "^2024.2",
+        "php-defer/php-defer": "^5.0.7",
+        "phpstan/phpstan": "^1.12.11",
+        "phpunit/phpunit": "^10.5.38",
         "phpyh/coding-standard": "^2.6.2",
-        "symfony/var-dumper": "^6.4.11 || ^7.1.3",
-        "typhoon/opcache": "^0.2.1",
-        "typhoon/phpstorm-reflection-stubs": "^0.4.4"
+        "symfony/mime": "^6.4.13",
+        "symfony/var-dumper": "^6.4.15 || ^7.1.3",
+        "typhoon/opcache": "^0.2.1"
     },
     "conflict": {
         "typhoon/phpstorm-reflection-stubs": "<0.4.3"
@@ -46,7 +44,7 @@
             "Typhoon\\Reflection\\": "src/"
         },
         "files": [
-            "src/Internal/functions.php"
+            "src/Internal/_functions.php"
         ]
     },
     "autoload-dev": {

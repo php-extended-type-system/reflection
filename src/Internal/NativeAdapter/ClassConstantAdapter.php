@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Typhoon\Reflection\Internal\NativeAdapter;
 
-use Typhoon\DeclarationId\AnonymousClassId;
 use Typhoon\Reflection\ClassConstantReflection;
-use Typhoon\Reflection\Internal\Data;
 use Typhoon\Reflection\ModifierKind;
 use Typhoon\Reflection\TypeKind;
 use Typhoon\Reflection\TyphoonReflector;
@@ -20,32 +18,17 @@ use Typhoon\Reflection\TyphoonReflector;
  */
 final class ClassConstantAdapter extends \ReflectionClassConstant
 {
-    private function __construct(
+    public function __construct(
         private readonly ClassConstantReflection $reflection,
         private readonly TyphoonReflector $reflector,
     ) {
         unset($this->name, $this->class);
     }
 
-    public static function create(ClassConstantReflection $reflection, TyphoonReflector $reflector): \ReflectionClassConstant
-    {
-        $adapter = new self($reflection, $reflector);
-
-        if ($reflection->isBackedEnumCase()) {
-            return new EnumBackedCaseAdapter($adapter, $reflection);
-        }
-
-        if ($reflection->isEnumCase()) {
-            return new EnumUnitCaseAdapter($adapter);
-        }
-
-        return $adapter;
-    }
-
     public function __get(string $name)
     {
         return match ($name) {
-            'name' => $this->reflection->id->name,
+            'name' => $this->reflection->name,
             'class' => $this->getDeclaringClass()->name,
             default => new \LogicException(\sprintf('Undefined property %s::$%s', self::class, $name)),
         };
@@ -70,15 +53,9 @@ final class ClassConstantAdapter extends \ReflectionClassConstant
 
     public function getDeclaringClass(): \ReflectionClass
     {
-        $declaringClassId = $this->reflection->data[Data::DeclaringClassId];
+        $declaringClass = $this->reflector->reflectClass($this->reflection->declarationId->class);
 
-        if ($declaringClassId instanceof AnonymousClassId) {
-            return $this->reflector->reflect($this->reflection->id->class)->toNativeReflection();
-        }
-
-        $declaringClass = $this->reflector->reflect($declaringClassId);
-
-        if ($declaringClass->isTrait()) {
+        if ($declaringClass->isAnonymous() || $declaringClass->isTrait()) {
             return $this->reflection->class()->toNativeReflection();
         }
 
@@ -87,7 +64,7 @@ final class ClassConstantAdapter extends \ReflectionClassConstant
 
     public function getDocComment(): string|false
     {
-        return $this->reflection->phpDoc() ?? false;
+        return $this->reflection->phpDoc()?->toString() ?? false;
     }
 
     public function getModifiers(): int
