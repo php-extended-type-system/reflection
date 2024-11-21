@@ -56,6 +56,10 @@ final class ClassFixtures
         'ZMQPoll' => true,
         // Fatal error: OAuthProvider::__construct(): For the CLI sapi parameters must be set first via OAuthProvider::__construct(array("oauth_param" => "value", ...))
         'OAuthProvider' => true,
+        // problems with readonly properties
+        'AMQPTimestamp' => true,
+        // problems with readonly properties
+        'AMQPDecimal' => true,
     ];
 
     /**
